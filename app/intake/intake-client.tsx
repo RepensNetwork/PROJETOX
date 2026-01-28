@@ -1,10 +1,9 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import { Label } from "@/components/ui/label"
 import {
   Select,
@@ -14,8 +13,6 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import type { Escala, Navio } from "@/lib/types/database"
-
-type Mode = "text" | "audio"
 
 type TaskResponse = {
   task?: unknown
@@ -92,7 +89,6 @@ const prioridadeOptions = [
 ]
 
 export function IntakeClient({ escalas }: IntakeClientProps) {
-  const [mode, setMode] = useState<Mode>("text")
   const [text, setText] = useState("")
   const [taskJson, setTaskJson] = useState<string>("")
   const [loadingFormat, setLoadingFormat] = useState(false)
@@ -105,35 +101,20 @@ export function IntakeClient({ escalas }: IntakeClientProps) {
   const [categoria, setCategoria] = useState("processos_internos")
   const [prioridade, setPrioridade] = useState("media")
 
-  const [isRecording, setIsRecording] = useState(false)
-  const [audioBlob, setAudioBlob] = useState<Blob | null>(null)
-  const [audioUrl, setAudioUrl] = useState<string | null>(null)
-  const [transcribing, setTranscribing] = useState(false)
-  const [transcript, setTranscript] = useState("")
-  const [transcribeError, setTranscribeError] = useState<string | null>(null)
-
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
-  const mediaStreamRef = useRef<MediaStream | null>(null)
-  const chunksRef = useRef<Blob[]>([])
-
   useEffect(() => {
     try {
       const raw = localStorage.getItem("intakeDraft_v1")
       if (!raw) return
       const draft = JSON.parse(raw) as Partial<{
-        mode: Mode
         text: string
         taskJson: string
-        transcript: string
         escalaId: string
         tipo: string
         categoria: string
         prioridade: string
       }>
-      if (draft.mode) setMode(draft.mode)
       if (draft.text) setText(draft.text)
       if (draft.taskJson) setTaskJson(draft.taskJson)
-      if (draft.transcript) setTranscript(draft.transcript)
       if (draft.escalaId) setEscalaId(draft.escalaId)
       if (draft.tipo) setTipo(draft.tipo)
       if (draft.categoria) setCategoria(draft.categoria)
@@ -145,10 +126,8 @@ export function IntakeClient({ escalas }: IntakeClientProps) {
 
   useEffect(() => {
     const payload = {
-      mode,
       text,
       taskJson,
-      transcript,
       escalaId,
       tipo,
       categoria,
@@ -159,18 +138,7 @@ export function IntakeClient({ escalas }: IntakeClientProps) {
     } catch (error) {
       console.warn("Falha ao salvar rascunho:", error)
     }
-  }, [mode, text, taskJson, transcript, escalaId, tipo, categoria, prioridade])
-
-  useEffect(() => {
-    return () => {
-      if (mediaStreamRef.current) {
-        mediaStreamRef.current.getTracks().forEach((track) => track.stop())
-      }
-      if (audioUrl) {
-        URL.revokeObjectURL(audioUrl)
-      }
-    }
-  }, [audioUrl])
+  }, [text, taskJson, escalaId, tipo, categoria, prioridade])
 
   const resetFormat = () => {
     setTaskJson("")
@@ -282,9 +250,9 @@ export function IntakeClient({ escalas }: IntakeClientProps) {
   }
 
   const handleFormat = async () => {
-    const input = (mode === "audio" ? transcript : text).trim()
+    const input = text.trim()
     if (!input) {
-      setFormatError("Digite ou transcreva um texto antes de formatar.")
+      setFormatError("Digite ou cole um texto antes de formatar.")
       return
     }
 
@@ -319,89 +287,18 @@ export function IntakeClient({ escalas }: IntakeClientProps) {
     }
   }
 
-  const startRecording = async () => {
-    setTranscribeError(null)
-    setTranscript("")
-    setAudioBlob(null)
-    setAudioUrl(null)
-    resetFormat()
-
+  const handlePaste = async () => {
+    setFormatError(null)
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      mediaStreamRef.current = stream
-
-      const recorder = new MediaRecorder(stream)
-      chunksRef.current = []
-
-      recorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          chunksRef.current.push(event.data)
-        }
-      }
-
-      recorder.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: "audio/webm" })
-        setAudioBlob(blob)
-        const url = URL.createObjectURL(blob)
-        setAudioUrl(url)
-      }
-
-      recorder.start()
-      mediaRecorderRef.current = recorder
-      setIsRecording(true)
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Não foi possível acessar o microfone."
-      setTranscribeError(message)
-    }
-  }
-
-  const stopRecording = () => {
-    const recorder = mediaRecorderRef.current
-    if (!recorder) return
-    recorder.stop()
-    setIsRecording(false)
-    if (mediaStreamRef.current) {
-      mediaStreamRef.current.getTracks().forEach((track) => track.stop())
-      mediaStreamRef.current = null
-    }
-  }
-
-  const handleTranscribe = async () => {
-    if (!audioBlob) {
-      setTranscribeError("Grave um áudio antes de transcrever.")
-      return
-    }
-
-    setTranscribing(true)
-    setTranscribeError(null)
-    resetFormat()
-
-    const formData = new FormData()
-    formData.append("file", new File([audioBlob], "audio.webm", { type: audioBlob.type || "audio/webm" }))
-
-    try {
-      const response = await fetch("/api/intake/audio", {
-        method: "POST",
-        body: formData,
-      })
-      const { data, rawText } = await parseJsonResponse<{ transcript?: string; error?: string }>(response)
-
-      if (!response.ok) {
-        setTranscribeError(
-          data?.error ||
-            `Falha ao transcrever áudio. Status ${response.status}. ${
-              rawText ? rawText.slice(0, 200) : "Resposta inválida."
-            }`
-        )
+      const clipboardText = await navigator.clipboard.readText()
+      if (!clipboardText.trim()) {
+        setFormatError("A área de transferência está vazia.")
         return
       }
-
-      setTranscript(data?.transcript || "")
+      setText(clipboardText)
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Falha de conexão ao transcrever."
-      setTranscribeError(message)
-    } finally {
-      setTranscribing(false)
+      const message = error instanceof Error ? error.message : "Não foi possível acessar a área de transferência."
+      setFormatError(message)
     }
   }
 
@@ -410,96 +307,37 @@ export function IntakeClient({ escalas }: IntakeClientProps) {
       <Card>
         <CardHeader>
           <CardTitle>Entrada</CardTitle>
-          <CardDescription>Escolha texto ou áudio para registrar a demanda</CardDescription>
+          <CardDescription>Cole o texto do email para registrar a demanda</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              variant={mode === "text" ? "default" : "outline"}
-              onClick={() => setMode("text")}
-            >
-              Texto
-            </Button>
-            <Button
-              type="button"
-              variant={mode === "audio" ? "default" : "outline"}
-              onClick={() => setMode("audio")}
-            >
-              Áudio
-            </Button>
+          <div className="space-y-3">
+            <Textarea
+              rows={8}
+              value={text}
+              onChange={(event) => setText(event.target.value)}
+              placeholder="Cole o email aqui com o máximo de detalhes possível..."
+            />
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" variant="outline" onClick={handlePaste}>
+                Colar
+              </Button>
+              <Button type="button" onClick={handleFormat} disabled={loadingFormat}>
+                {loadingFormat ? "Formatando..." : "Formatar com IA"}
+              </Button>
+              <Button type="button" variant="outline" onClick={resetFormat}>
+                Limpar preview
+              </Button>
+            </div>
           </div>
 
-          {mode === "text" && (
-            <div className="space-y-3">
-              <Textarea
-                rows={8}
-                value={text}
-                onChange={(event) => setText(event.target.value)}
-                placeholder="Descreva a demanda com o máximo de detalhes possível..."
-              />
-              <div className="flex flex-wrap gap-2">
-                <Button type="button" onClick={handleFormat} disabled={loadingFormat}>
-                  {loadingFormat ? "Formatando..." : "Formatar com IA"}
-                </Button>
-                <Button type="button" variant="outline" onClick={resetFormat}>
-                  Limpar preview
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {mode === "audio" && (
-            <div className="space-y-4">
-              <div className="flex flex-wrap gap-2 items-center">
-                <Button
-                  type="button"
-                  onClick={isRecording ? stopRecording : startRecording}
-                  variant={isRecording ? "destructive" : "default"}
-                >
-                  {isRecording ? "Parar gravação" : "Gravar áudio"}
-                </Button>
-                <Badge variant="outline">
-                  {isRecording ? "Gravando..." : audioBlob ? "Gravação pronta" : "Aguardando"}
-                </Badge>
-              </div>
-
-              {audioUrl && (
-                <audio controls src={audioUrl} className="w-full">
-                  Seu navegador não suporta reprodução de áudio.
-                </audio>
-              )}
-
-              <div className="flex flex-wrap gap-2">
-                <Button type="button" onClick={handleTranscribe} disabled={transcribing}>
-                  {transcribing ? "Transcrevendo..." : "Transcrever áudio"}
-                </Button>
-                <Button type="button" onClick={handleFormat} variant="outline" disabled={loadingFormat}>
-                  {loadingFormat ? "Formatando..." : "Formatar com IA"}
-                </Button>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Transcrição</label>
-                <Textarea
-                  rows={6}
-                  value={transcript}
-                  onChange={(event) => setTranscript(event.target.value)}
-                  placeholder="A transcrição aparecerá aqui. Você pode editar antes de formatar."
-                />
-              </div>
-            </div>
-          )}
-
           {formatError && <p className="text-sm text-destructive">{formatError}</p>}
-          {transcribeError && <p className="text-sm text-destructive">{transcribeError}</p>}
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
           <CardTitle>Preview da tarefa</CardTitle>
-          <CardDescription>Veja o JSON estruturado antes de salvar</CardDescription>
+          <CardDescription>Veja a descrição formatada antes de salvar</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="grid gap-3">
@@ -574,8 +412,17 @@ export function IntakeClient({ escalas }: IntakeClientProps) {
             </Button>
           </div>
           <div className="rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground min-h-[240px] overflow-auto">
-            {taskJson ? (
-              <pre className="whitespace-pre-wrap">{taskJson}</pre>
+            {parsedTask ? (
+              <div className="space-y-3 text-foreground">
+                <div>
+                  <p className="text-xs uppercase text-muted-foreground">Título</p>
+                  <p className="text-sm">{parsedTask.title || "Sem título"}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase text-muted-foreground">Descrição</p>
+                  <pre className="whitespace-pre-wrap text-sm">{buildDescricao(parsedTask)}</pre>
+                </div>
+              </div>
             ) : (
               <p>O preview aparecerá aqui depois de formatar.</p>
             )}
