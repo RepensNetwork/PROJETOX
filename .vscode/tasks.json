@@ -1,0 +1,106 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "🚀 Iniciar Servidor de Desenvolvimento",
+      "type": "shell",
+      "command": "npm run dev",
+      "options": {
+        "env": {
+          "PATH": "${env:PATH};C:\\Program Files\\nodejs"
+        }
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "new",
+        "focus": true
+      },
+      "problemMatcher": [],
+      "runOptions": {
+        "runOn": "default"
+      }
+    },
+    {
+      "label": "📦 Instalar Dependências",
+      "type": "shell",
+      "command": "npm install --legacy-peer-deps",
+      "options": {
+        "env": {
+          "PATH": "${env:PATH};C:\\Program Files\\nodejs"
+        }
+      },
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "🧹 Limpar e Reconstruir",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-Command",
+        "$env:PATH += ';C:\\Program Files\\nodejs'; Remove-Item -Recurse -Force .next -ErrorAction SilentlyContinue; Remove-Item -Recurse -Force node_modules -ErrorAction SilentlyContinue; npm install --legacy-peer-deps"
+      ],
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "🔍 Verificar Linter",
+      "type": "shell",
+      "command": "npm run lint",
+      "options": {
+        "env": {
+          "PATH": "${env:PATH};C:\\Program Files\\nodejs"
+        }
+      },
+      "group": "test",
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "🏗️ Build do Projeto Task",
+      "type": "shell",
+      "command": "npm run build",
+      "options": {
+        "env": {
+          "PATH": "${env:PATH};C:\\Program Files\\nodejs"
+        }
+      },
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "🔄 Fechar Chrome Antes de Debug",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-Command",
+        "Get-Process chrome,msedge -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue; Write-Host 'Processos do Chrome/Edge fechados com sucesso'"
+      ],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new",
+        "focus": false
+      },
+      "problemMatcher": []
+    }
+  ]
+}

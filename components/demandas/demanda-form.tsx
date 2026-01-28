@@ -1,0 +1,442 @@
+"use client"
+
+import React from "react"
+
+import { useState } from "react"
+import { useRouter } from "next/navigation"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Plus, Loader2 } from "lucide-react"
+import { createDemanda, updateDemanda } from "@/app/actions/demandas"
+import type { Demanda, Escala, Navio, Membro } from "@/lib/types/database"
+
+interface DemandaFormProps {
+  demanda?: Demanda
+  escalaId?: string
+  escalas?: (Escala & { navio: Navio })[]
+  membros: Membro[]
+  trigger?: React.ReactNode
+  onSuccess?: () => void
+}
+
+const statusOptions = [
+  { value: "pendente", label: "Pendente" },
+  { value: "em_andamento", label: "Em Andamento" },
+  { value: "concluida", label: "Concluída" },
+  { value: "aguardando_terceiro", label: "Aguardando Terceiro" },
+  { value: "cancelada", label: "Cancelada" },
+]
+
+const prioridadeOptions = [
+  { value: "baixa", label: "Baixa" },
+  { value: "media", label: "Média" },
+  { value: "alta", label: "Alta" },
+  { value: "urgente", label: "Urgente" },
+]
+
+const tipoOptions = [
+  { value: "embarque_passageiros", label: "Embarque de Passageiros" },
+  { value: "desembarque_passageiros", label: "Desembarque de Passageiros" },
+  { value: "controle_listas", label: "Controle de Listas" },
+  { value: "suporte_especial", label: "Suporte Especial" },
+  { value: "visita_medica", label: "Visita Médica" },
+  { value: "atendimento_emergencial", label: "Atendimento Emergencial" },
+  { value: "documentacao_medica", label: "Documentação Médica" },
+  { value: "orcamento_produtos", label: "Orçamento de Produtos" },
+  { value: "compra", label: "Compra" },
+  { value: "entrega_bordo", label: "Entrega a Bordo" },
+  { value: "confirmacao_recebimento", label: "Confirmação de Recebimento" },
+  { value: "abastecimento_agua", label: "Abastecimento de Água" },
+  { value: "combustivel", label: "Combustível" },
+  { value: "controle_horarios", label: "Controle de Horários" },
+  { value: "policia_federal", label: "Polícia Federal" },
+  { value: "receita_federal", label: "Receita Federal" },
+  { value: "mapa", label: "Mapa" },
+  { value: "port_authority", label: "Port Authority" },
+  { value: "reserva_hotel", label: "Reserva de Hotel" },
+  { value: "transporte_terrestre", label: "Transporte Terrestre" },
+  { value: "motorista", label: "Motorista" },
+  { value: "veiculo", label: "Veículo" },
+  { value: "pickup_dropoff", label: "Pickup/Dropoff" },
+  { value: "checklist_padrao", label: "Checklist Padrão" },
+  { value: "relatorio", label: "Relatório" },
+  { value: "documento_obrigatorio", label: "Documento Obrigatório" },
+  { value: "procedimento_repetitivo", label: "Procedimento Repetitivo" },
+  { value: "outro", label: "Outro" },
+]
+
+const categoriaOptions = [
+  { value: "passageiros", label: "Passageiros" },
+  { value: "saude", label: "Saúde" },
+  { value: "suprimentos", label: "Suprimentos" },
+  { value: "abastecimento", label: "Abastecimento" },
+  { value: "autoridades", label: "Autoridades" },
+  { value: "logistica", label: "Logística" },
+  { value: "processos_internos", label: "Processos Internos" },
+]
+
+export function DemandaForm({ 
+  demanda, 
+  escalaId, 
+  escalas, 
+  membros, 
+  trigger, 
+  onSuccess 
+}: DemandaFormProps) {
+  const router = useRouter()
+  const [open, setOpen] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const getPrazoString = (prazo: string | null | undefined): string => {
+    if (!prazo) return ""
+    try {
+      const prazoDate = new Date(prazo)
+      if (!isNaN(prazoDate.getTime())) {
+        return prazoDate.toISOString().slice(0, 16)
+      }
+    } catch (error) {
+      console.error("Erro ao converter prazo:", error)
+    }
+    return ""
+  }
+
+  const [formData, setFormData] = useState({
+    escala_id: demanda?.escala_id || escalaId || "",
+    tipo: demanda?.tipo || "outro",
+    categoria: demanda?.categoria || "processos_internos",
+    titulo: demanda?.titulo || "",
+    descricao: demanda?.descricao || "",
+    status: demanda?.status || "pendente",
+    prioridade: demanda?.prioridade || "media",
+    responsavel_id: demanda?.responsavel_id || "",
+    prazo: getPrazoString(demanda?.prazo),
+  })
+
+  // Atualizar escala_id quando escalaId mudar
+  React.useEffect(() => {
+    if (escalaId && !demanda) {
+      setFormData(prev => ({ ...prev, escala_id: escalaId }))
+    }
+  }, [escalaId, demanda])
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+
+    try {
+      // Validações
+      if (!formData.titulo || formData.titulo.trim() === "") {
+        alert("Por favor, preencha o título da demanda.")
+        setLoading(false)
+        return
+      }
+
+      if (!escalaId && (!formData.escala_id || formData.escala_id.trim() === "")) {
+        alert("Por favor, selecione uma escala.")
+        setLoading(false)
+        return
+      }
+
+      if (!formData.tipo || formData.tipo.trim() === "") {
+        alert("Por favor, selecione o tipo da demanda.")
+        setLoading(false)
+        return
+      }
+
+      if (!formData.categoria || formData.categoria.trim() === "") {
+        alert("Por favor, selecione a categoria da demanda.")
+        setLoading(false)
+        return
+      }
+
+      // Validar data de prazo se fornecida
+      let prazoISO: string | undefined = undefined
+      if (formData.prazo && formData.prazo.trim() !== "") {
+        try {
+          const prazoDate = new Date(formData.prazo)
+          if (isNaN(prazoDate.getTime())) {
+            alert("Data de prazo inválida. Por favor, verifique o formato.")
+            setLoading(false)
+            return
+          }
+          prazoISO = prazoDate.toISOString()
+        } catch (error) {
+          alert("Erro ao processar data de prazo. Por favor, verifique o formato.")
+          setLoading(false)
+          return
+        }
+      }
+
+      const data = {
+        escala_id: escalaId || formData.escala_id,
+        tipo: formData.tipo as Demanda["tipo"],
+        categoria: formData.categoria as Demanda["categoria"],
+        titulo: formData.titulo.trim(),
+        descricao: formData.descricao?.trim() || undefined,
+        status: formData.status as Demanda["status"],
+        prioridade: formData.prioridade as Demanda["prioridade"],
+        responsavel_id: formData.responsavel_id || undefined,
+        prazo: prazoISO,
+      }
+
+      console.log("Enviando demanda:", data)
+
+      const result = demanda
+        ? await updateDemanda(demanda.id, data)
+        : await createDemanda(data)
+
+      console.log("Resultado:", result)
+
+      if (result.success) {
+        setOpen(false)
+        router.refresh()
+        onSuccess?.()
+        if (!demanda) {
+          setFormData({
+            escala_id: escalaId || "",
+            tipo: "outro",
+            categoria: "processos_internos",
+            titulo: "",
+            descricao: "",
+            status: "pendente",
+            prioridade: "media",
+            responsavel_id: "",
+            prazo: "",
+          })
+        }
+      } else {
+        alert(result.error || "Erro ao salvar demanda. Verifique o console para mais detalhes.")
+        console.error("Erro ao salvar demanda:", result.error)
+      }
+    } catch (error) {
+      console.error("Erro inesperado:", error)
+      alert("Erro inesperado ao salvar demanda. Verifique o console para mais detalhes.")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        {trigger || (
+          <Button>
+            <Plus className="h-4 w-4 mr-2" />
+            Nova Demanda
+          </Button>
+        )}
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-[500px]">
+        <form onSubmit={handleSubmit}>
+          <DialogHeader>
+            <DialogTitle>{demanda ? "Editar Demanda" : "Nova Demanda"}</DialogTitle>
+            <DialogDescription>
+              {demanda
+                ? "Atualize as informações da demanda."
+                : "Preencha as informações da nova demanda."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            {!escalaId && escalas && escalas.length > 0 && (
+              <div className="space-y-2">
+                <Label htmlFor="escala_id">Escala *</Label>
+                <Select
+                  value={formData.escala_id}
+                  onValueChange={(value) => setFormData({ ...formData, escala_id: value })}
+                  required
+                >
+                  <SelectTrigger id="escala_id">
+                    <SelectValue placeholder="Selecione uma escala" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {escalas.map((escala) => (
+                      <SelectItem key={escala.id} value={escala.id}>
+                        {escala.navio.nome} - {escala.porto}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            {!escalaId && (!escalas || escalas.length === 0) && (
+              <div className="rounded-lg border border-warning/50 bg-warning/10 p-4">
+                <p className="text-sm text-warning-foreground">
+                  ⚠️ Nenhuma escala disponível. Crie uma escala primeiro antes de adicionar demandas.
+                </p>
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="tipo">Tipo *</Label>
+                <Select
+                  value={formData.tipo}
+                  onValueChange={(value) => setFormData({ ...formData, tipo: value })}
+                  required
+                >
+                  <SelectTrigger id="tipo">
+                    <SelectValue placeholder="Selecione o tipo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {tipoOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="categoria">Categoria *</Label>
+                <Select
+                  value={formData.categoria}
+                  onValueChange={(value) => setFormData({ ...formData, categoria: value })}
+                  required
+                >
+                  <SelectTrigger id="categoria">
+                    <SelectValue placeholder="Selecione a categoria" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categoriaOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="titulo">Título *</Label>
+              <Input
+                id="titulo"
+                value={formData.titulo}
+                onChange={(e) => setFormData({ ...formData, titulo: e.target.value })}
+                placeholder="Título da demanda"
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="descricao">Descrição</Label>
+              <Textarea
+                id="descricao"
+                value={formData.descricao}
+                onChange={(e) => setFormData({ ...formData, descricao: e.target.value })}
+                placeholder="Descrição detalhada da demanda..."
+                rows={3}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="status">Status</Label>
+                <Select
+                  value={formData.status}
+                  onValueChange={(value) => setFormData({ ...formData, status: value })}
+                >
+                  <SelectTrigger id="status">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {statusOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="prioridade">Prioridade</Label>
+                <Select
+                  value={formData.prioridade}
+                  onValueChange={(value) => setFormData({ ...formData, prioridade: value })}
+                >
+                  <SelectTrigger id="prioridade">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {prioridadeOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="responsavel_id">Responsável</Label>
+              <Select
+                value={formData.responsavel_id}
+                onValueChange={(value) => setFormData({ ...formData, responsavel_id: value === "none" ? "" : value })}
+              >
+                <SelectTrigger id="responsavel_id">
+                  <SelectValue placeholder="Selecione um responsável" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Sem responsável</SelectItem>
+                  {membros.map((membro) => (
+                    <SelectItem key={membro.id} value={membro.id}>
+                      {membro.nome}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="prazo">Prazo</Label>
+              <Input
+                id="prazo"
+                type="datetime-local"
+                value={formData.prazo}
+                onChange={(e) => setFormData({ ...formData, prazo: e.target.value })}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+              Cancelar
+            </Button>
+            <Button 
+              type="submit" 
+              disabled={
+                loading || 
+                !formData.titulo?.trim() || 
+                !formData.tipo ||
+                !formData.categoria ||
+                (!escalaId && (!formData.escala_id || formData.escala_id.trim() === ""))
+              }
+            >
+              {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {demanda ? "Salvar" : "Criar"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
