@@ -1,9 +1,10 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
 import { Label } from "@/components/ui/label"
 import {
   Select,
@@ -35,6 +36,8 @@ type TaskPayload = {
   questions?: string[]
   assumptions?: string[]
 }
+
+type Mode = "text" | "audio"
 
 interface IntakeClientProps {
   escalas: (Escala & { navio: Navio })[]
@@ -89,6 +92,7 @@ const prioridadeOptions = [
 ]
 
 export function IntakeClient({ escalas }: IntakeClientProps) {
+  const [mode, setMode] = useState<Mode>("text")
   const [text, setText] = useState("")
   const [taskJson, setTaskJson] = useState<string>("")
   const [loadingFormat, setLoadingFormat] = useState(false)
@@ -101,22 +105,36 @@ export function IntakeClient({ escalas }: IntakeClientProps) {
   const [tipo, setTipo] = useState("outro")
   const [categoria, setCategoria] = useState("processos_internos")
   const [prioridade, setPrioridade] = useState("media")
+  const [isRecording, setIsRecording] = useState(false)
+  const [audioBlob, setAudioBlob] = useState<Blob | null>(null)
+  const [audioUrl, setAudioUrl] = useState<string | null>(null)
+  const [transcribing, setTranscribing] = useState(false)
+  const [transcript, setTranscript] = useState("")
+  const [transcribeError, setTranscribeError] = useState<string | null>(null)
+
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const mediaStreamRef = useRef<MediaStream | null>(null)
+  const chunksRef = useRef<Blob[]>([])
 
   useEffect(() => {
     try {
       const raw = localStorage.getItem("intakeDraft_v1")
       if (!raw) return
       const draft = JSON.parse(raw) as Partial<{
+        mode: Mode
         text: string
         taskJson: string
+        transcript: string
         navioId: string
         escalaId: string
         tipo: string
         categoria: string
         prioridade: string
       }>
+      if (draft.mode) setMode(draft.mode)
       if (draft.text) setText(draft.text)
       if (draft.taskJson) setTaskJson(draft.taskJson)
+      if (draft.transcript) setTranscript(draft.transcript)
       if (draft.navioId) setNavioId(draft.navioId)
       if (draft.escalaId) setEscalaId(draft.escalaId)
       if (draft.tipo) setTipo(draft.tipo)
@@ -129,8 +147,10 @@ export function IntakeClient({ escalas }: IntakeClientProps) {
 
   useEffect(() => {
     const payload = {
+      mode,
       text,
       taskJson,
+      transcript,
       navioId,
       escalaId,
       tipo,
@@ -142,7 +162,18 @@ export function IntakeClient({ escalas }: IntakeClientProps) {
     } catch (error) {
       console.warn("Falha ao salvar rascunho:", error)
     }
-  }, [text, taskJson, navioId, escalaId, tipo, categoria, prioridade])
+  }, [mode, text, taskJson, transcript, navioId, escalaId, tipo, categoria, prioridade])
+
+  useEffect(() => {
+    return () => {
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach((track) => track.stop())
+      }
+      if (audioUrl) {
+        URL.revokeObjectURL(audioUrl)
+      }
+    }
+  }, [audioUrl])
 
   const resetFormat = () => {
     setTaskJson("")
@@ -184,8 +215,29 @@ export function IntakeClient({ escalas }: IntakeClientProps) {
 
   const escalasFiltradas = useMemo(() => {
     if (!navioId) return []
-    return escalas.filter((escala) => escala.navio.id === navioId)
+    const now = new Date()
+    return escalas
+      .filter((escala) => escala.navio.id === navioId)
+      .filter((escala) => {
+        const chegada = new Date(escala.data_chegada)
+        if (Number.isNaN(chegada.getTime())) return false
+        return chegada >= now
+      })
+      .slice()
+      .sort((a, b) => new Date(b.data_chegada).getTime() - new Date(a.data_chegada).getTime())
   }, [escalas, navioId])
+
+  const formatEscalaLabel = (escala: Escala) => {
+    const date = new Date(escala.data_chegada)
+    const dateLabel = Number.isNaN(date.getTime())
+      ? ""
+      : date.toLocaleDateString("pt-BR", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+        })
+    return dateLabel ? `${escala.porto} • ${dateLabel}` : escala.porto
+  }
 
   const buildDescricao = (task: TaskPayload) => {
     const parts: string[] = []
@@ -205,6 +257,13 @@ export function IntakeClient({ escalas }: IntakeClientProps) {
       parts.push(extras.join("\n"))
     }
     return parts.join("\n\n").trim()
+  }
+
+  const buildTitulo = (task: TaskPayload) => {
+    if (task.title && task.title.trim()) return task.title.trim()
+    const descricao = buildDescricao(task)
+    const firstLine = descricao.split("\n").find((line) => line.trim().length > 0) || ""
+    return firstLine.slice(0, 120).trim() || "Demanda"
   }
 
   const getPrazoFromTask = (task: TaskPayload) => {
@@ -230,11 +289,6 @@ export function IntakeClient({ escalas }: IntakeClientProps) {
       setSaveError("Selecione uma escala para salvar a demanda.")
       return
     }
-    if (!parsedTask.title) {
-      setSaveError("A tarefa não possui título válido.")
-      return
-    }
-
     setSaving(true)
 
     const payload = {
@@ -242,7 +296,7 @@ export function IntakeClient({ escalas }: IntakeClientProps) {
       tipo,
       categoria,
       prioridade,
-      titulo: parsedTask.title,
+      titulo: buildTitulo(parsedTask),
       descricao: buildDescricao(parsedTask),
       prazo: getPrazoFromTask(parsedTask),
     }
@@ -266,6 +320,23 @@ export function IntakeClient({ escalas }: IntakeClientProps) {
       }
 
       setSaveSuccess("Demanda criada com sucesso.")
+      setMode("text")
+      setText("")
+      setTaskJson("")
+      setNavioId("")
+      setEscalaId("")
+      setTipo("outro")
+      setCategoria("processos_internos")
+      setPrioridade("media")
+      setIsRecording(false)
+      setAudioBlob(null)
+      if (audioUrl) {
+        URL.revokeObjectURL(audioUrl)
+      }
+      setAudioUrl(null)
+      setTranscript("")
+      setTranscribeError(null)
+      setFormatError(null)
     } catch (error) {
       const message = error instanceof Error ? error.message : "Falha de conexão ao salvar."
       setSaveError(message)
@@ -274,8 +345,7 @@ export function IntakeClient({ escalas }: IntakeClientProps) {
     }
   }
 
-  const handleFormat = async () => {
-    const input = text.trim()
+  const formatInput = async (input: string) => {
     if (!input) {
       setFormatError("Digite ou cole um texto antes de formatar.")
       return
@@ -312,6 +382,100 @@ export function IntakeClient({ escalas }: IntakeClientProps) {
     }
   }
 
+  const handleFormat = async () => {
+    const input = text.trim()
+    await formatInput(input)
+  }
+
+  const startRecording = async () => {
+    setTranscribeError(null)
+    setTranscript("")
+    setAudioBlob(null)
+    setAudioUrl(null)
+    resetFormat()
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      mediaStreamRef.current = stream
+
+      const recorder = new MediaRecorder(stream)
+      chunksRef.current = []
+
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          chunksRef.current.push(event.data)
+        }
+      }
+
+      recorder.onstop = () => {
+        const blob = new Blob(chunksRef.current, { type: "audio/webm" })
+        setAudioBlob(blob)
+        const url = URL.createObjectURL(blob)
+        setAudioUrl(url)
+      }
+
+      recorder.start()
+      mediaRecorderRef.current = recorder
+      setIsRecording(true)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Não foi possível acessar o microfone."
+      setTranscribeError(message)
+    }
+  }
+
+  const stopRecording = () => {
+    const recorder = mediaRecorderRef.current
+    if (!recorder) return
+    recorder.stop()
+    setIsRecording(false)
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach((track) => track.stop())
+      mediaStreamRef.current = null
+    }
+  }
+
+  const handleTranscribe = async () => {
+    if (!audioBlob) {
+      setTranscribeError("Grave um áudio antes de transcrever.")
+      return
+    }
+
+    setTranscribing(true)
+    setTranscribeError(null)
+    resetFormat()
+
+    const formData = new FormData()
+    formData.append("file", new File([audioBlob], "audio.webm", { type: audioBlob.type || "audio/webm" }))
+
+    try {
+      const response = await fetch("/api/intake/audio", {
+        method: "POST",
+        body: formData,
+      })
+      const { data, rawText } = await parseJsonResponse<{ transcript?: string; error?: string }>(response)
+
+      if (!response.ok) {
+        setTranscribeError(
+          data?.error ||
+            `Falha ao transcrever áudio. Status ${response.status}. ${
+              rawText ? rawText.slice(0, 200) : "Resposta inválida."
+            }`
+        )
+        return
+      }
+
+      const newTranscript = data?.transcript || ""
+      setTranscript(newTranscript)
+      setText(newTranscript)
+      await formatInput(newTranscript.trim())
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Falha de conexão ao transcrever."
+      setTranscribeError(message)
+    } finally {
+      setTranscribing(false)
+    }
+  }
+
   const handlePaste = async () => {
     setFormatError(null)
     try {
@@ -337,30 +501,92 @@ export function IntakeClient({ escalas }: IntakeClientProps) {
       <Card>
         <CardHeader>
           <CardTitle>Entrada</CardTitle>
-          <CardDescription>Cole o texto do email para registrar a demanda</CardDescription>
+          <CardDescription>Informe texto ou áudio para registrar a demanda</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="space-y-3">
-            <Textarea
-              rows={8}
-              value={text}
-              onChange={(event) => setText(event.target.value)}
-              placeholder="Cole o email aqui com o máximo de detalhes possível..."
-            />
-            <div className="flex flex-wrap gap-2">
-              <Button type="button" variant="outline" onClick={handlePaste}>
-                Colar
-              </Button>
-              <Button type="button" onClick={handleFormat} disabled={loadingFormat}>
-                {loadingFormat ? "Formatando..." : "Formatar com IA"}
-              </Button>
-              <Button type="button" variant="outline" onClick={resetFormat}>
-                Limpar preview
-              </Button>
-            </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant={mode === "text" ? "default" : "outline"}
+              onClick={() => setMode("text")}
+            >
+              Texto
+            </Button>
+            <Button
+              type="button"
+              variant={mode === "audio" ? "default" : "outline"}
+              onClick={() => setMode("audio")}
+            >
+              Áudio
+            </Button>
           </div>
 
+          {mode === "text" && (
+            <div className="space-y-3">
+              <Textarea
+                rows={8}
+                value={text}
+                onChange={(event) => setText(event.target.value)}
+                placeholder="Cole o email aqui com o máximo de detalhes possível..."
+              />
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" variant="outline" onClick={handlePaste}>
+                  Colar
+                </Button>
+                <Button type="button" onClick={handleFormat} disabled={loadingFormat}>
+                  {loadingFormat ? "Formatando..." : "Formatar com IA"}
+                </Button>
+                <Button type="button" variant="outline" onClick={resetFormat}>
+                  Limpar preview
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {mode === "audio" && (
+            <div className="space-y-4">
+              <div className="flex flex-wrap gap-2 items-center">
+                <Button
+                  type="button"
+                  onClick={isRecording ? stopRecording : startRecording}
+                  variant={isRecording ? "destructive" : "default"}
+                >
+                  {isRecording ? "Parar gravação" : "Gravar áudio"}
+                </Button>
+                <Badge variant="outline">
+                  {isRecording ? "Gravando..." : audioBlob ? "Gravação pronta" : "Aguardando"}
+                </Badge>
+              </div>
+
+              {audioUrl && (
+                <audio controls src={audioUrl} className="w-full">
+                  Seu navegador não suporta reprodução de áudio.
+                </audio>
+              )}
+
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" onClick={handleTranscribe} disabled={transcribing || !audioBlob}>
+                  {transcribing ? "Transcrevendo..." : "Transcrever e gerar preview"}
+                </Button>
+                <Button type="button" variant="outline" onClick={resetFormat} disabled={transcribing}>
+                  Limpar preview
+                </Button>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Transcrição</label>
+                <Textarea
+                  rows={6}
+                  value={transcript}
+                  onChange={(event) => setTranscript(event.target.value)}
+                  placeholder="A transcrição aparecerá aqui após o áudio."
+                />
+              </div>
+            </div>
+          )}
+
           {formatError && <p className="text-sm text-destructive">{formatError}</p>}
+          {transcribeError && <p className="text-sm text-destructive">{transcribeError}</p>}
         </CardContent>
       </Card>
 
@@ -396,7 +622,7 @@ export function IntakeClient({ escalas }: IntakeClientProps) {
                 <SelectContent>
                   {escalasFiltradas.map((escala) => (
                     <SelectItem key={escala.id} value={escala.id}>
-                      {escala.porto}
+                      {formatEscalaLabel(escala)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -459,15 +685,9 @@ export function IntakeClient({ escalas }: IntakeClientProps) {
           </div>
           <div className="rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground min-h-[240px] overflow-auto">
             {parsedTask ? (
-              <div className="space-y-3 text-foreground">
-                <div>
-                  <p className="text-xs uppercase text-muted-foreground">Título</p>
-                  <p className="text-sm">{parsedTask.title || "Sem título"}</p>
-                </div>
-                <div>
-                  <p className="text-xs uppercase text-muted-foreground">Descrição</p>
-                  <pre className="whitespace-pre-wrap text-sm">{buildDescricao(parsedTask)}</pre>
-                </div>
+              <div className="space-y-2 text-foreground">
+                <p className="text-xs uppercase text-muted-foreground">Observação</p>
+                <pre className="whitespace-pre-wrap text-sm">{buildDescricao(parsedTask)}</pre>
               </div>
             ) : (
               <p>O preview aparecerá aqui depois de formatar.</p>

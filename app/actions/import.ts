@@ -95,6 +95,20 @@ export async function importEscalas(data: any[]): Promise<{ success: boolean; im
   const errors: string[] = []
   let imported = 0
 
+  const parseDateTime = (dateValue: string, timeValue?: string) => {
+    const dateMatch = String(dateValue || "").match(/(\d{2})\/(\d{2})\/(\d{4})/)
+    if (dateMatch) {
+      const [, dd, mm, yyyy] = dateMatch
+      const timeMatch = String(timeValue || "").match(/(\d{1,2}):(\d{2})/)
+      const hour = timeMatch ? Number(timeMatch[1]) : 0
+      const minute = timeMatch ? Number(timeMatch[2]) : 0
+      const date = new Date(Number(yyyy), Number(mm) - 1, Number(dd), hour, minute, 0)
+      return Number.isNaN(date.getTime()) ? null : date
+    }
+    const date = new Date(dateValue)
+    return Number.isNaN(date.getTime()) ? null : date
+  }
+
   // Primeiro, buscar todos os navios para mapear nome -> id
   const { data: navios } = await supabase.from("navios").select("id, nome")
 
@@ -110,12 +124,30 @@ export async function importEscalas(data: any[]): Promise<{ success: boolean; im
 
   for (const row of data) {
     try {
-      const navioNome = row.navio || row.navio_nome || row.ship || ""
-      const porto = row.porto || row.port || ""
-      const dataChegada = row.data_chegada || row.chegada || row.arrival || ""
-      const dataSaida = row.data_saida || row.saida || row.departure || ""
+      const navioNome = row.navio || row["navio"] || row.navio_nome || row.ship || ""
+      const porto = row.porto || row["porto"] || row.port || ""
+      const dataChegada =
+        row.data_chegada ||
+        row["data de chegada"] ||
+        row.chegada ||
+        row.arrival ||
+        ""
+      const dataSaida =
+        row.data_saida ||
+        row["data de saida"] ||
+        row["data de saída"] ||
+        row.saida ||
+        row.departure ||
+        ""
       const status = row.status || "planejada"
-      const observacoes = row.observacoes || row.observations || row.obs || null
+      const observacoes = row.observacoes || row.observations || row.obs || ""
+      const voy = row.voy || row.voyage || ""
+      const procedencia = row.procedencia || row["procedencia"] || row["procedência"] || row.origem || row.origin || ""
+      const destino = row.destino || row["destino"] || row.destination || ""
+      const operacao = row.operacao || row["operação"] || row["operacao"] || ""
+      const viagem = row.viagem || row["viagem"] || ""
+      const horaChegada = row.hora_chegada || row["hora chegada"] || row.chegada || ""
+      const horaSaida = row.hora_saida || row["hora saida"] || row["hora saída"] || row.saida || ""
 
       if (!navioNome || !porto || !dataChegada) {
         errors.push(`Linha ${data.indexOf(row) + 2}: Navio, porto e data de chegada são obrigatórios`)
@@ -132,25 +164,32 @@ export async function importEscalas(data: any[]): Promise<{ success: boolean; im
       let saidaDate: Date | null = null
 
       try {
-        chegadaDate = new Date(dataChegada)
-        if (isNaN(chegadaDate.getTime())) {
-          throw new Error("Data de chegada inválida")
-        }
+        const parsed = parseDateTime(dataChegada, horaChegada)
+        if (!parsed) throw new Error("Data de chegada inválida")
+        chegadaDate = parsed
       } catch {
         errors.push(`Linha ${data.indexOf(row) + 2}: Data de chegada inválida`)
         continue
       }
 
-      if (dataSaida) {
-        try {
-          saidaDate = new Date(dataSaida)
-          if (isNaN(saidaDate.getTime())) {
-            saidaDate = null
-          }
-        } catch {
-          saidaDate = null
-        }
+      if (dataSaida || horaSaida) {
+        const parsedSaida = parseDateTime(dataSaida || dataChegada, horaSaida)
+        saidaDate = parsedSaida || null
       }
+
+      const detalhes: string[] = []
+      if (voy) detalhes.push(`Voy: ${String(voy).trim()}`)
+      if (procedencia) detalhes.push(`Procedência: ${String(procedencia).trim()}`)
+      if (destino) detalhes.push(`Destino: ${String(destino).trim()}`)
+      if (operacao) detalhes.push(`Operação: ${String(operacao).trim()}`)
+      if (viagem) detalhes.push(`Viagem: ${String(viagem).trim()}`)
+
+      const observacoesFinal = [
+        observacoes ? String(observacoes).trim() : "",
+        detalhes.length > 0 ? detalhes.join("\n") : "",
+      ]
+        .filter(Boolean)
+        .join("\n")
 
       const { error } = await supabase.from("escalas").insert({
         navio_id: navioId,
@@ -158,7 +197,7 @@ export async function importEscalas(data: any[]): Promise<{ success: boolean; im
         data_chegada: chegadaDate.toISOString(),
         data_saida: saidaDate ? saidaDate.toISOString() : null,
         status: status.trim() as any,
-        observacoes: observacoes?.trim() || null,
+        observacoes: observacoesFinal || null,
       })
 
       if (error) {

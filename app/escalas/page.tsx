@@ -28,12 +28,62 @@ export default async function EscalasPage() {
               title="Importar Escalas"
               description="Importe escalas a partir de um arquivo CSV. Os navios devem estar cadastrados primeiro."
               onImport={importEscalas}
-              exampleHeaders={["navio", "porto", "data_chegada", "data_saida", "status", "observacoes"]}
-              exampleRow={["Navio Exemplo", "Santos - SP", "2025-01-25T08:00:00", "2025-01-27T18:00:00", "planejada", ""]}
+              exampleHeaders={[
+                "navio",
+                "porto",
+                "data_chegada",
+                "data_saida",
+                "voy",
+                "procedencia",
+                "destino",
+                "status",
+                "observacoes",
+              ]}
+              exampleRow={[
+                "Navio Exemplo",
+                "Santos - SP",
+                "2025-01-25T08:00:00",
+                "2025-01-27T18:00:00",
+                "A123",
+                "Fortaleza - CE",
+                "Santos - SP",
+                "planejada",
+                "",
+              ]}
               exampleRows={[
-                ["Navio Exemplo", "Santos - SP", "2025-01-25T08:00:00", "2025-01-27T18:00:00", "planejada", ""],
-                ["Outro Navio", "Paranaguá - PR", "2025-02-01T10:00:00", "2025-02-03T18:00:00", "em_operacao", ""],
-                ["Terceiro Navio", "Rio Grande - RS", "2025-02-10T14:00:00", "", "planejada", "Escala rápida"]
+                [
+                  "Navio Exemplo",
+                  "Santos - SP",
+                  "2025-01-25T08:00:00",
+                  "2025-01-27T18:00:00",
+                  "A123",
+                  "Fortaleza - CE",
+                  "Santos - SP",
+                  "planejada",
+                  "",
+                ],
+                [
+                  "Outro Navio",
+                  "Paranaguá - PR",
+                  "2025-02-01T10:00:00",
+                  "2025-02-03T18:00:00",
+                  "B456",
+                  "Rio de Janeiro - RJ",
+                  "Paranaguá - PR",
+                  "em_operacao",
+                  "",
+                ],
+                [
+                  "Terceiro Navio",
+                  "Rio Grande - RS",
+                  "2025-02-10T14:00:00",
+                  "",
+                  "",
+                  "",
+                  "",
+                  "planejada",
+                  "Escala rápida",
+                ],
               ]}
             />
             <EscalaForm navios={navios} />

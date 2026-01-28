@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Ship, ClipboardList, Clock, AlertTriangle, CheckCircle, XCircle } from "lucide-react"
 import type { DashboardStats, Escala, Demanda, Navio } from "@/lib/types/database"
@@ -30,6 +30,17 @@ export function StatsCards({ stats, escalas, allDemandas, navios }: StatsCardsPr
 
   const concluidasDemandas = allDemandas.filter(d => d.status === "concluida")
 
+  const escalasPorNavio = useMemo(() => {
+    const map = new Map<string, number>()
+    escalas.forEach((escala) => {
+      const nome = escala.navio?.nome || "Navio"
+      map.set(nome, (map.get(nome) || 0) + 1)
+    })
+    return Array.from(map.entries())
+      .map(([nome, total]) => ({ nome, total }))
+      .sort((a, b) => b.total - a.total || a.nome.localeCompare(b.nome))
+  }, [escalas])
+
   return (
     <>
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -46,6 +57,15 @@ export function StatsCards({ stats, escalas, allDemandas, navios }: StatsCardsPr
             <p className="text-xs text-muted-foreground">
               Escalas agendadas mais próximas
             </p>
+            {escalasPorNavio.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                {escalasPorNavio.map((item) => (
+                  <span key={item.nome} className="rounded bg-muted px-2 py-1">
+                    {item.nome}: {item.total}
+                  </span>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
 
