@@ -1,0 +1,4 @@
+git add .
+git commit -m "initial project"
+git remote set-url origin https://SEU_TOKEN@github.com/RepensNetwork/PROJETOX.git
+git push -u origin main
