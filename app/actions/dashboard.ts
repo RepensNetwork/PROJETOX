@@ -27,16 +27,16 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   const stats: DashboardStats = {
     totalEscalasAtivas: totalEscalasAtivas || 0,
     totalDemandas: demandas?.length || 0,
-    demandasPendentes: demandas?.filter(d => d.status === "pendente").length || 0,
-    demandasEmAndamento: demandas?.filter(d => d.status === "em_andamento").length || 0,
-    demandasConcluidas: demandas?.filter(d => d.status === "concluida").length || 0,
-    demandasBloqueadas: demandas?.filter(d => d.status === "aguardando_terceiro").length || 0,
-    demandasAtrasadas: demandas?.filter(d => 
+    demandasPendentes: demandas?.filter((d: Demanda) => d.status === "pendente").length || 0,
+    demandasEmAndamento: demandas?.filter((d: Demanda) => d.status === "em_andamento").length || 0,
+    demandasConcluidas: demandas?.filter((d: Demanda) => d.status === "concluida").length || 0,
+    demandasBloqueadas: demandas?.filter((d: Demanda) => d.status === "aguardando_terceiro").length || 0,
+    demandasAtrasadas: demandas?.filter((d: Demanda) => 
       d.prazo && 
       new Date(d.prazo) < now && 
       d.status !== "concluida"
     ).length || 0,
-    demandasCriticas: demandas?.filter(d => d.prioridade === "urgente" && d.status !== "concluida").length || 0,
+    demandasCriticas: demandas?.filter((d: Demanda) => d.prioridade === "urgente" && d.status !== "concluida").length || 0,
   }
 
   return stats
