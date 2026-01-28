@@ -7,6 +7,7 @@ export async function POST(req: Request) {
   const googleCredentialsFile = process.env.GOOGLE_APPLICATION_CREDENTIALS
   const hasGoogle = Boolean(googleCredentialsJson || googleCredentialsFile)
   const hasOpenAI = Boolean(process.env.OPENAI_API_KEY)
+  const googleCompatibleTypes = ["audio/webm", "audio/ogg"]
 
   if (!hasGoogle && !hasOpenAI) {
     return NextResponse.json(
@@ -23,7 +24,10 @@ export async function POST(req: Request) {
   }
 
   try {
-    if (hasGoogle) {
+    const contentType = (file.type || "").toLowerCase()
+    const isGoogleCompatible = googleCompatibleTypes.some((type) => contentType.startsWith(type))
+
+    if (hasGoogle && isGoogleCompatible) {
       const credentials = googleCredentialsJson ? JSON.parse(googleCredentialsJson) : undefined
       const client = new SpeechClient(
         credentials
@@ -49,13 +53,20 @@ export async function POST(req: Request) {
       return NextResponse.json({ transcript })
     }
 
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-    const transcription = await openai.audio.transcriptions.create({
-      file,
-      model: "gpt-4o-mini-transcribe",
-    })
+    if (hasOpenAI) {
+      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+      const transcription = await openai.audio.transcriptions.create({
+        file,
+        model: "gpt-4o-mini-transcribe",
+      })
 
-    return NextResponse.json({ transcript: transcription.text })
+      return NextResponse.json({ transcript: transcription.text })
+    }
+
+    return NextResponse.json(
+      { error: "Formato de áudio não suportado para transcrição." },
+      { status: 415 }
+    )
   } catch (error) {
     const message = error instanceof Error ? error.message : "Falha ao transcrever áudio"
     return NextResponse.json({ error: message }, { status: 500 })

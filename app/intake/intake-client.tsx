@@ -115,6 +115,13 @@ export function IntakeClient({ escalas }: IntakeClientProps) {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const mediaStreamRef = useRef<MediaStream | null>(null)
   const chunksRef = useRef<Blob[]>([])
+  const recordMimeTypeRef = useRef<string>("audio/webm;codecs=opus")
+
+  const getSupportedMimeType = () => {
+    if (typeof MediaRecorder === "undefined") return null
+    const candidates = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus", "audio/mp4"]
+    return candidates.find((type) => MediaRecorder.isTypeSupported?.(type)) || ""
+  }
 
   useEffect(() => {
     try {
@@ -395,10 +402,21 @@ export function IntakeClient({ escalas }: IntakeClientProps) {
     resetFormat()
 
     try {
+      const supportedType = getSupportedMimeType()
+      if (supportedType === null) {
+        setTranscribeError("Este navegador não suporta gravação de áudio. Use a opção de texto.")
+        return
+      }
+      if (!supportedType) {
+        setTranscribeError("Formato de áudio não suportado neste navegador. Use a opção de texto.")
+        return
+      }
+      recordMimeTypeRef.current = supportedType
+
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       mediaStreamRef.current = stream
 
-      const recorder = new MediaRecorder(stream)
+      const recorder = new MediaRecorder(stream, { mimeType: supportedType })
       chunksRef.current = []
 
       recorder.ondataavailable = (event) => {
@@ -408,7 +426,7 @@ export function IntakeClient({ escalas }: IntakeClientProps) {
       }
 
       recorder.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: "audio/webm" })
+        const blob = new Blob(chunksRef.current, { type: recordMimeTypeRef.current || supportedType })
         setAudioBlob(blob)
         const url = URL.createObjectURL(blob)
         setAudioUrl(url)
@@ -445,7 +463,8 @@ export function IntakeClient({ escalas }: IntakeClientProps) {
     resetFormat()
 
     const formData = new FormData()
-    formData.append("file", new File([audioBlob], "audio.webm", { type: audioBlob.type || "audio/webm" }))
+    const filename = audioBlob.type?.includes("mp4") ? "audio.mp4" : "audio.webm"
+    formData.append("file", new File([audioBlob], filename, { type: audioBlob.type || "audio/webm" }))
 
     try {
       const response = await fetch("/api/intake/audio", {
