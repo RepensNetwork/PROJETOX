@@ -210,6 +210,8 @@ export async function syncEmailsImap(): Promise<{ success: boolean; imported: nu
     }
     return { success: false, imported: 0, error: "Graph/IMAP não configurado no .env.local" }
   }
+
+  return { success: false, imported: 0, error: "IMAP/Graph não configurado no .env.local" }
 }
 
 async function syncEmailsImapInternal({
