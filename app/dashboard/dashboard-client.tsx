@@ -44,7 +44,7 @@ export function DashboardClient({
   const [navioId, setNavioId] = useState<string | null>(null)
   const [dateFilter, setDateFilter] = useState<string | null>(null)
   const [openDialog, setOpenDialog] = useState(false)
-  const [dialogType, setDialogType] = useState<"hotel" | "transporte">("hotel")
+  const [dialogType, setDialogType] = useState<"hotel" | "transporte" | "embarque" | "tripulantes">("hotel")
 
   const todayKey = useMemo(() => toDateKey(new Date().toISOString()), [])
 
@@ -102,9 +102,39 @@ export function DashboardClient({
       ),
     [allDemandas, navioId, dateFilter]
   )
+  const embarqueDesembarqueDemandas = useMemo(
+    () =>
+      applyDemandaFilters(
+        allDemandas.filter(
+          (demanda) => demanda.tipo === "embarque_passageiros" || demanda.tipo === "desembarque_passageiros"
+        )
+      ),
+    [allDemandas, navioId, dateFilter]
+  )
+  const tripulantesDemandas = useMemo(
+    () =>
+      applyDemandaFilters(
+        allDemandas.filter((demanda) => demanda.tipo === "controle_listas")
+      ),
+    [allDemandas, navioId, dateFilter]
+  )
 
-  const dialogTitle = dialogType === "hotel" ? "Reservas de hotel" : "Transportes terrestres"
-  const dialogList = dialogType === "hotel" ? hotelDemandas : transporteDemandas
+  const dialogTitle =
+    dialogType === "hotel"
+      ? "Reservas de hotel"
+      : dialogType === "transporte"
+        ? "Transportes terrestres"
+        : dialogType === "embarque"
+          ? "Embarques e desembarques"
+          : "Tripulantes"
+  const dialogList =
+    dialogType === "hotel"
+      ? hotelDemandas
+      : dialogType === "transporte"
+        ? transporteDemandas
+        : dialogType === "embarque"
+          ? embarqueDesembarqueDemandas
+          : tripulantesDemandas
 
   return (
     <div className="space-y-6">
@@ -168,6 +198,56 @@ export function DashboardClient({
           </CardHeader>
           <CardContent>
             <p className="text-3xl font-semibold">{transporteDemandas.length}</p>
+          </CardContent>
+        </Card>
+
+        <Card
+          role="button"
+          tabIndex={0}
+          onClick={() => {
+            setDialogType("embarque")
+            setOpenDialog(true)
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault()
+              setDialogType("embarque")
+              setOpenDialog(true)
+            }
+          }}
+          className="cursor-pointer transition hover:border-primary/50"
+        >
+          <CardHeader>
+            <CardTitle>Embarques e desembarques</CardTitle>
+            <CardDescription>Demandas de passageiros</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="text-3xl font-semibold">{embarqueDesembarqueDemandas.length}</p>
+          </CardContent>
+        </Card>
+
+        <Card
+          role="button"
+          tabIndex={0}
+          onClick={() => {
+            setDialogType("tripulantes")
+            setOpenDialog(true)
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault()
+              setDialogType("tripulantes")
+              setOpenDialog(true)
+            }
+          }}
+          className="cursor-pointer transition hover:border-primary/50"
+        >
+          <CardHeader>
+            <CardTitle>Tripulantes</CardTitle>
+            <CardDescription>Demandas de controle de listas</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="text-3xl font-semibold">{tripulantesDemandas.length}</p>
           </CardContent>
         </Card>
       </div>
