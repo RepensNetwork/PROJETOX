@@ -96,6 +96,7 @@ export function IntakeClient({ escalas }: IntakeClientProps) {
   const [saveError, setSaveError] = useState<string | null>(null)
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [navioId, setNavioId] = useState("")
   const [escalaId, setEscalaId] = useState("")
   const [tipo, setTipo] = useState("outro")
   const [categoria, setCategoria] = useState("processos_internos")
@@ -108,6 +109,7 @@ export function IntakeClient({ escalas }: IntakeClientProps) {
       const draft = JSON.parse(raw) as Partial<{
         text: string
         taskJson: string
+        navioId: string
         escalaId: string
         tipo: string
         categoria: string
@@ -115,6 +117,7 @@ export function IntakeClient({ escalas }: IntakeClientProps) {
       }>
       if (draft.text) setText(draft.text)
       if (draft.taskJson) setTaskJson(draft.taskJson)
+      if (draft.navioId) setNavioId(draft.navioId)
       if (draft.escalaId) setEscalaId(draft.escalaId)
       if (draft.tipo) setTipo(draft.tipo)
       if (draft.categoria) setCategoria(draft.categoria)
@@ -128,6 +131,7 @@ export function IntakeClient({ escalas }: IntakeClientProps) {
     const payload = {
       text,
       taskJson,
+      navioId,
       escalaId,
       tipo,
       categoria,
@@ -138,7 +142,7 @@ export function IntakeClient({ escalas }: IntakeClientProps) {
     } catch (error) {
       console.warn("Falha ao salvar rascunho:", error)
     }
-  }, [text, taskJson, escalaId, tipo, categoria, prioridade])
+  }, [text, taskJson, navioId, escalaId, tipo, categoria, prioridade])
 
   const resetFormat = () => {
     setTaskJson("")
@@ -165,6 +169,23 @@ export function IntakeClient({ escalas }: IntakeClientProps) {
       return null
     }
   }, [taskJson])
+
+  const navioOptions = useMemo(() => {
+    const map = new Map<string, string>()
+    escalas.forEach((escala) => {
+      if (!map.has(escala.navio.id)) {
+        map.set(escala.navio.id, escala.navio.nome)
+      }
+    })
+    return Array.from(map.entries())
+      .map(([id, nome]) => ({ id, nome }))
+      .sort((a, b) => a.nome.localeCompare(b.nome))
+  }, [escalas])
+
+  const escalasFiltradas = useMemo(() => {
+    if (!navioId) return []
+    return escalas.filter((escala) => escala.navio.id === navioId)
+  }, [escalas, navioId])
 
   const buildDescricao = (task: TaskPayload) => {
     const parts: string[] = []
@@ -199,6 +220,10 @@ export function IntakeClient({ escalas }: IntakeClientProps) {
 
     if (!taskJson || !parsedTask) {
       setSaveError("Gere o preview da tarefa antes de salvar.")
+      return
+    }
+    if (!navioId) {
+      setSaveError("Selecione um navio para salvar a demanda.")
       return
     }
     if (!escalaId) {
@@ -302,6 +327,11 @@ export function IntakeClient({ escalas }: IntakeClientProps) {
     }
   }
 
+  const handleSelectNavio = (value: string) => {
+    setNavioId(value)
+    setEscalaId("")
+  }
+
   return (
     <div className="grid gap-6 lg:grid-cols-[1.3fr_1fr]">
       <Card>
@@ -342,15 +372,31 @@ export function IntakeClient({ escalas }: IntakeClientProps) {
         <CardContent className="space-y-3">
           <div className="grid gap-3">
             <div className="space-y-2">
-              <Label htmlFor="escala">Escala *</Label>
-              <Select value={escalaId} onValueChange={setEscalaId}>
-                <SelectTrigger id="escala">
-                  <SelectValue placeholder="Selecione uma escala" />
+              <Label htmlFor="navio">Navio *</Label>
+              <Select value={navioId} onValueChange={handleSelectNavio}>
+                <SelectTrigger id="navio">
+                  <SelectValue placeholder="Selecione um navio" />
                 </SelectTrigger>
                 <SelectContent>
-                  {escalas.map((escala) => (
+                  {navioOptions.map((navio) => (
+                    <SelectItem key={navio.id} value={navio.id}>
+                      {navio.nome}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="escala">Escala *</Label>
+              <Select value={escalaId} onValueChange={setEscalaId} disabled={!navioId}>
+                <SelectTrigger id="escala">
+                  <SelectValue placeholder={navioId ? "Selecione uma escala" : "Selecione um navio"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {escalasFiltradas.map((escala) => (
                     <SelectItem key={escala.id} value={escala.id}>
-                      {escala.navio.nome} - {escala.porto}
+                      {escala.porto}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -407,7 +453,7 @@ export function IntakeClient({ escalas }: IntakeClientProps) {
               </Select>
             </div>
 
-            <Button type="button" onClick={handleSave} disabled={saving || !taskJson || !escalaId}>
+            <Button type="button" onClick={handleSave} disabled={saving || !taskJson || !navioId || !escalaId}>
               {saving ? "Salvando..." : "Salvar tarefa"}
             </Button>
           </div>
