@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { LayoutDashboard, Ship, Calendar, ClipboardList, Menu, Users, LogOut, User, Shield, Mail, Mic } from "lucide-react"
+import { LayoutDashboard, Ship, Calendar, ClipboardList, Menu, Users, LogOut, User, Shield, Mail, Mic, Car } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { useState, useEffect } from "react"
@@ -24,6 +24,7 @@ const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "Gravar Demanda", href: "/intake", icon: Mic },
   { name: "Inbox", href: "/emails", icon: Mail },
+  { name: "Transportes", href: "/motorista", icon: Car },
   { name: "Navios", href: "/navios", icon: Ship },
   { name: "Escalas", href: "/escalas", icon: Calendar },
   { name: "Demandas", href: "/demandas", icon: ClipboardList },

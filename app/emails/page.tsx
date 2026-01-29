@@ -2,11 +2,12 @@ import { Header } from "@/components/layout/header"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Badge } from "@/components/ui/badge"
 import { getEmails } from "@/app/actions/emails"
 import { getNavios } from "@/app/actions/navios"
+import { getEscalasForSelect } from "@/app/actions/demandas"
 import { Mail, RefreshCw } from "lucide-react"
 import { SyncEmailsForm } from "@/app/emails/sync-emails-form"
+import { EmailsInboxClient } from "@/app/emails/emails-inbox-client"
 
 interface EmailsPageProps {
   searchParams?: {
@@ -17,20 +18,6 @@ interface EmailsPageProps {
     from?: string
     to?: string
   }
-}
-
-const statusColors: Record<string, string> = {
-  new: "bg-warning/10 text-warning-foreground border-warning/30",
-  triaged: "bg-primary/10 text-primary border-primary/30",
-  assigned: "bg-muted text-muted-foreground border-muted/30",
-  done: "bg-success/10 text-success border-success/30",
-}
-
-const statusLabels: Record<string, string> = {
-  new: "Novo",
-  triaged: "Triado",
-  assigned: "Atribuído",
-  done: "Concluído",
 }
 
 export default async function EmailsPage({ searchParams }: EmailsPageProps) {
@@ -46,6 +33,7 @@ export default async function EmailsPage({ searchParams }: EmailsPageProps) {
   )
 
   const navios = await getNavios()
+  const escalas = await getEscalasForSelect()
   const emails = await getEmails({
     navioId: searchParams?.navio || null,
     topic: searchParams?.topic || null,
@@ -145,41 +133,7 @@ export default async function EmailsPage({ searchParams }: EmailsPageProps) {
           </div>
         )}
 
-        <div className="rounded-lg border bg-card">
-          {emails.length === 0 ? (
-            <div className="p-8 text-center text-muted-foreground">
-              Nenhum email encontrado. Verifique filtros e sincronização.
-            </div>
-          ) : (
-            <div className="divide-y">
-              {emails.map((email) => (
-                <div key={email.id} className="p-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                  <div className="space-y-1">
-                    <p className="font-medium">{email.subject || "Sem assunto"}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {email.from_name || email.from_email || "Remetente desconhecido"}
-                    </p>
-                    <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-                      {email.ship && <span>Navio: {email.ship}</span>}
-                      {email.topic && <span>Tópico: {email.topic}</span>}
-                      {email.received_at && <span>Recebido: {new Date(email.received_at).toLocaleString("pt-BR")}</span>}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline" className={statusColors[email.status] || ""}>
-                      {statusLabels[email.status] || email.status}
-                    </Badge>
-                    {email.due_at && (
-                      <Badge variant="outline">
-                        Prazo: {new Date(email.due_at).toLocaleString("pt-BR")}
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        <EmailsInboxClient emails={emails} navios={navios} escalas={escalas} />
       </main>
     </div>
   )

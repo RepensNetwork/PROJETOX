@@ -115,6 +115,188 @@ const detectNavio = (navios: Navio[], content: string) => {
   return { navioId: null, ship: null }
 }
 
+const inferPrioridade = (content: string) => {
+  const text = normalizeText(content)
+  if (text.includes("urgente") || text.includes("urgent") || text.includes("asap") || text.includes("imediato")) {
+    return "urgente"
+  }
+  if (text.includes("alta") || text.includes("high")) return "alta"
+  if (text.includes("baixa") || text.includes("low")) return "baixa"
+  return "media"
+}
+
+const isAuthFailedError = (error: unknown) => {
+  if (!error || typeof error !== "object") return false
+  const anyError = error as {
+    authenticationFailed?: boolean
+    responseText?: string
+    serverResponseCode?: string
+  }
+  if (anyError.authenticationFailed) return true
+  if (anyError.serverResponseCode === "AUTHENTICATIONFAILED") return true
+  if (anyError.responseText?.toLowerCase().includes("authentication failed")) return true
+  return false
+}
+
+const createImapClient = (params: {
+  host: string
+  port: number
+  secure: boolean
+  user: string
+  password: string
+  authMethod?: "LOGIN"
+}) => {
+  return new ImapFlow({
+    host: params.host,
+    port: params.port,
+    secure: params.secure,
+    auth: { user: params.user, pass: params.password },
+    authMethod: params.authMethod,
+  })
+}
+
+const connectImapWithFallbacks = async (params: {
+  host: string
+  port: number
+  secure: boolean
+  user: string
+  password: string
+}) => {
+  const userCandidates = [params.user]
+  if (params.user.includes("@")) {
+    userCandidates.push(params.user.split("@")[0])
+  }
+
+  const attempts: Array<{ user: string; authMethod?: "LOGIN" }> = []
+  for (const user of userCandidates) {
+    attempts.push({ user })
+    attempts.push({ user, authMethod: "LOGIN" })
+  }
+
+  let lastError: unknown = null
+  for (const attempt of attempts) {
+    const client = createImapClient({
+      host: params.host,
+      port: params.port,
+      secure: params.secure,
+      user: attempt.user,
+      password: params.password,
+      authMethod: attempt.authMethod,
+    })
+    try {
+      await client.connect()
+      return client
+    } catch (error) {
+      lastError = error
+      await client.logout().catch(() => null)
+      if (!isAuthFailedError(error)) {
+        throw error
+      }
+    }
+  }
+
+  throw lastError
+}
+
+type ImapAccount = {
+  host: string
+  port: number
+  secure: boolean
+  mailbox: string
+  fetchLimit: number
+  user: string
+  password: string
+  tag: string
+}
+
+const parseMaskedPassword = (value?: string | null) => {
+  if (!value) return null
+  const trimmed = value.trim()
+  if (trimmed.startsWith("***") && trimmed.endsWith("***") && trimmed.length > 6) {
+    return trimmed.slice(3, -3)
+  }
+  return trimmed
+}
+
+const parseCommaList = (value?: string | null) => {
+  if (!value) return []
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
+const parseBoolean = (value: unknown, fallback: boolean) => {
+  if (typeof value === "boolean") return value
+  if (typeof value === "string") {
+    if (value.toLowerCase() === "false") return false
+    if (value.toLowerCase() === "true") return true
+  }
+  return fallback
+}
+
+const parseNumber = (value: unknown, fallback: number) => {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : fallback
+}
+
+const resolveImapAccounts = (): ImapAccount[] => {
+  const defaultHost = process.env.IMAP_HOST || ""
+  const defaultPort = Number(process.env.IMAP_PORT || "993")
+  const defaultSecure = process.env.IMAP_SECURE !== "false"
+  const defaultMailbox = process.env.IMAP_MAILBOX || "INBOX"
+  const defaultFetchLimit = Number(process.env.IMAP_FETCH_COUNT || "30")
+
+  const buildAccount = (raw: any): ImapAccount | null => {
+    const user = String(raw?.user || "").trim()
+    const password = parseMaskedPassword(raw?.password)
+    const host = String(raw?.host || defaultHost || "").trim()
+    if (!host || !user || !password) return null
+    const port = parseNumber(raw?.port, defaultPort)
+    const secure = parseBoolean(raw?.secure, defaultSecure)
+    const mailbox = String(raw?.mailbox || defaultMailbox || "INBOX").trim()
+    const fetchLimit = parseNumber(raw?.fetchLimit, defaultFetchLimit)
+    const tag = String(raw?.tag || user).trim() || user
+    return { host, port, secure, mailbox, fetchLimit, user, password, tag }
+  }
+
+  const jsonConfig = process.env.IMAP_ACCOUNTS
+  if (jsonConfig) {
+    try {
+      const parsed = JSON.parse(jsonConfig)
+      if (Array.isArray(parsed)) {
+        return parsed.map(buildAccount).filter(Boolean) as ImapAccount[]
+      }
+    } catch (error) {
+      console.error("IMAP_ACCOUNTS inválido (JSON).", error)
+    }
+  }
+
+  const users = parseCommaList(process.env.IMAP_USERS)
+  const passwords = parseCommaList(process.env.IMAP_PASSWORDS)
+  const tags = parseCommaList(process.env.IMAP_TAGS)
+  if (users.length > 0 && passwords.length > 0) {
+    return users
+      .map((user, index) =>
+        buildAccount({
+          user,
+          password: passwords[index] || "",
+          tag: tags[index] || user,
+        })
+      )
+      .filter(Boolean) as ImapAccount[]
+  }
+
+  const singleUser = process.env.IMAP_USER
+  const singlePassword = parseMaskedPassword(process.env.IMAP_PASSWORD)
+  if (singleUser && singlePassword && defaultHost) {
+    const account = buildAccount({ user: singleUser, password: singlePassword })
+    return account ? [account] : []
+  }
+
+  return []
+}
+
 export async function getEmails(filters: EmailFilters = {}): Promise<(EmailRegistro & { navio?: Navio })[]> {
   const supabase = await createClient()
 
@@ -160,34 +342,56 @@ export async function getEmails(filters: EmailFilters = {}): Promise<(EmailRegis
   return data || []
 }
 
-export async function syncEmailsImap(): Promise<{ success: boolean; imported: number; error?: string }> {
+export async function syncEmailsImap(): Promise<{
+  success: boolean
+  imported: number
+  fetched?: number
+  failed?: number
+  error?: string
+  message?: string
+}> {
   const graphTenantId = process.env.GRAPH_TENANT_ID
   const graphClientId = process.env.GRAPH_CLIENT_ID
   const graphClientSecret = process.env.GRAPH_CLIENT_SECRET
   const graphUser = process.env.GRAPH_USER
-  const graphFetchCount = Number(process.env.GRAPH_FETCH_COUNT || "15")
+  const graphFetchCount = Number(process.env.GRAPH_FETCH_COUNT || "30")
 
   const graphConfigured = Boolean(graphTenantId && graphClientId && graphClientSecret && graphUser)
 
-  const host = process.env.IMAP_HOST
-  const user = process.env.IMAP_USER
-  const password = process.env.IMAP_PASSWORD
-  const port = Number(process.env.IMAP_PORT || "993")
-  const secure = process.env.IMAP_SECURE !== "false"
-  const mailbox = process.env.IMAP_MAILBOX || "INBOX"
-  const fetchLimit = Number(process.env.IMAP_FETCH_COUNT || "15")
-  const imapConfigured = Boolean(host && user && password)
+  const imapAccounts = resolveImapAccounts()
+  const imapConfigured = imapAccounts.length > 0
 
   if (imapConfigured) {
-    return await syncEmailsImapInternal({
-      host,
-      user,
-      password,
-      port,
-      secure,
-      mailbox,
-      fetchLimit,
-    })
+    let imported = 0
+    let fetched = 0
+    let failed = 0
+    const errors: string[] = []
+
+    for (const account of imapAccounts) {
+      const result = await syncEmailsImapInternal({
+        host: account.host,
+        user: account.user,
+        password: account.password,
+        port: account.port,
+        secure: account.secure,
+        mailbox: account.mailbox,
+        fetchLimit: account.fetchLimit,
+        accountTag: account.tag,
+      })
+      imported += result.imported
+      fetched += result.fetched ?? 0
+      failed += result.failed ?? 0
+      if (!result.success && result.error) {
+        errors.push(`[${account.tag}] ${result.error}`)
+      }
+    }
+
+    if (errors.length > 0 && imported === 0) {
+      return { success: false, imported, fetched, failed, error: errors.join(" | ") }
+    }
+
+    const message = errors.length > 0 ? `Algumas contas falharam: ${errors.join(" | ")}` : undefined
+    return { success: true, imported, fetched, failed, message }
   }
 
   if (graphConfigured) {
@@ -222,6 +426,7 @@ async function syncEmailsImapInternal({
   secure,
   mailbox,
   fetchLimit,
+  accountTag,
 }: {
   host: string
   user: string
@@ -230,26 +435,32 @@ async function syncEmailsImapInternal({
   secure: boolean
   mailbox: string
   fetchLimit: number
-}): Promise<{ success: boolean; imported: number; error?: string }> {
+  accountTag: string
+}): Promise<{
+  success: boolean
+  imported: number
+  fetched?: number
+  failed?: number
+  error?: string
+  message?: string
+}> {
   const supabase = await createClient()
   const { data: navios } = await supabase.from("navios").select("id, nome")
   const navioList = navios || []
 
-  const client = new ImapFlow({
-    host,
-    port,
-    secure,
-    auth: { user, pass: password },
-  })
-
   let imported = 0
+  let failed = 0
+  let fetched = 0
+  let firstErrorMessage: string | null = null
+  let client: ImapFlow | null = null
 
   try {
-    await client.connect()
+    client = await connectImapWithFallbacks({ host, port, secure, user, password })
     const lock = await client.getMailboxLock(mailbox)
     try {
       const all = await client.search({ all: true })
       const uids = all.slice(-fetchLimit)
+      fetched = uids.length
 
       for await (const message of client.fetch(uids, { uid: true, source: true })) {
         if (!message.source) continue
@@ -264,6 +475,7 @@ async function syncEmailsImapInternal({
         const { navioId, ship } = detectNavio(navioList, searchContent)
         const topic = detectTopic(searchContent)
         const dueAt = extractDueAt(searchContent)
+        const prioridade = inferPrioridade(searchContent)
 
         const attachments = parsed.attachments?.map((item) => ({
           filename: item.filename || null,
@@ -286,28 +498,54 @@ async function syncEmailsImapInternal({
           topic,
           due_at: dueAt ? dueAt.toISOString() : null,
           status: "new",
+          priority: prioridade,
+          account_tag: accountTag,
           attachments: attachments && attachments.length > 0 ? attachments : null,
-        })
+        }, { onConflict: "provider,provider_id,account_tag" })
 
-        if (!error) {
-          imported += 1
+        if (error) {
+          failed += 1
+          if (!firstErrorMessage) firstErrorMessage = error.message
+          console.error("Erro ao salvar email no Supabase:", error)
+          continue
         }
+
+        imported += 1
+
       }
     } finally {
       lock.release()
     }
   } catch (error: any) {
     console.error("Error syncing emails:", error)
-    return { success: false, imported, error: error.message }
+    return { success: false, imported, fetched, failed, error: error.message }
   } finally {
-    await client.logout().catch(() => null)
+    if (client) {
+      await client.logout().catch(() => null)
+    }
+  }
+
+  if (failed > 0 && imported === 0) {
+    return {
+      success: false,
+      imported,
+      fetched,
+      failed,
+      error: `Falha ao salvar emails no Supabase: ${firstErrorMessage || "erro desconhecido"}`,
+    }
   }
 
   if (imported > 0) {
     revalidatePath("/emails")
   }
+  const message =
+    fetched === 0
+      ? `Nenhum email encontrado na mailbox ${mailbox}.`
+      : imported === 0
+        ? "Nenhum email novo encontrado."
+        : undefined
 
-  return { success: true, imported }
+  return { success: true, imported, fetched, failed, message }
 }
 
 
@@ -323,12 +561,22 @@ async function syncEmailsGraph({
   clientSecret: string
   user: string
   fetchCount: number
-}): Promise<{ success: boolean; imported: number; error?: string }> {
+}): Promise<{
+  success: boolean
+  imported: number
+  fetched?: number
+  failed?: number
+  error?: string
+  message?: string
+}> {
   const supabase = await createClient()
   const { data: navios } = await supabase.from("navios").select("id, nome")
   const navioList = navios || []
 
   let imported = 0
+  let failed = 0
+  let fetched = 0
+  let firstErrorMessage: string | null = null
 
   try {
     const tokenResponse = await fetch(`https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`, {
@@ -367,6 +615,7 @@ async function syncEmailsGraph({
 
     const messagesData = await messagesResponse.json()
     const messages = messagesData.value || []
+    fetched = messages.length
 
     for (const message of messages) {
       const subject = message.subject || ""
@@ -379,6 +628,7 @@ async function syncEmailsGraph({
       const { navioId, ship } = detectNavio(navioList, searchContent)
       const topic = detectTopic(searchContent)
       const dueAt = extractDueAt(searchContent)
+      const prioridade = inferPrioridade(searchContent)
 
       const { error } = await supabase.from("emails").upsert({
         provider: "graph",
@@ -395,21 +645,45 @@ async function syncEmailsGraph({
         topic,
         due_at: dueAt ? dueAt.toISOString() : null,
         status: "new",
+        priority: prioridade,
+        account_tag: "graph",
         attachments: message.hasAttachments ? [{ hasAttachments: true }] : null,
-      })
+      }, { onConflict: "provider,provider_id,account_tag" })
 
-      if (!error) {
-        imported += 1
+      if (error) {
+        failed += 1
+        if (!firstErrorMessage) firstErrorMessage = error.message
+        console.error("Erro ao salvar email no Supabase:", error)
+        continue
       }
+
+      imported += 1
+
     }
   } catch (error: any) {
     console.error("Error syncing Graph emails:", error)
-    return { success: false, imported, error: error.message }
+    return { success: false, imported, fetched, failed, error: error.message }
+  }
+
+  if (failed > 0 && imported === 0) {
+    return {
+      success: false,
+      imported,
+      fetched,
+      failed,
+      error: `Falha ao salvar emails no Supabase: ${firstErrorMessage || "erro desconhecido"}`,
+    }
   }
 
   if (imported > 0) {
     revalidatePath("/emails")
   }
+  const message =
+    fetched === 0
+      ? "Nenhum email encontrado na Inbox do Microsoft Graph."
+      : imported === 0
+        ? "Nenhum email novo encontrado."
+        : undefined
 
-  return { success: true, imported }
+  return { success: true, imported, fetched, failed, message }
 }

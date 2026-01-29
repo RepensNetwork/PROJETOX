@@ -79,6 +79,14 @@ CREATE TABLE IF NOT EXISTS public.demandas (
   categoria demanda_categoria NOT NULL,
   titulo TEXT NOT NULL,
   descricao TEXT,
+  pickup_at TIMESTAMPTZ,
+  pickup_local TEXT,
+  dropoff_local TEXT,
+  transporte_status TEXT DEFAULT 'pendente',
+  transporte_modalidade TEXT,
+  transporte_grupo TEXT,
+  transporte_concluido_em TIMESTAMPTZ,
+  transporte_legs JSONB,
   responsavel_id UUID REFERENCES public.membros(id) ON DELETE SET NULL,
   prioridade demanda_prioridade DEFAULT 'media',
   status demanda_status DEFAULT 'pendente',
@@ -128,6 +136,7 @@ CREATE INDEX IF NOT EXISTS idx_demandas_escala ON public.demandas(escala_id);
 CREATE INDEX IF NOT EXISTS idx_demandas_status ON public.demandas(status);
 CREATE INDEX IF NOT EXISTS idx_demandas_responsavel ON public.demandas(responsavel_id);
 CREATE INDEX IF NOT EXISTS idx_demandas_prazo ON public.demandas(prazo);
+CREATE INDEX IF NOT EXISTS idx_demandas_pickup_at ON public.demandas(pickup_at);
 CREATE INDEX IF NOT EXISTS idx_comentarios_demanda ON public.comentarios(demanda_id);
 
 -- Enable Row Level Security (permissive for MVP - all authenticated users can access)

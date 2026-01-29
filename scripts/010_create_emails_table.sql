@@ -5,6 +5,8 @@ CREATE TABLE IF NOT EXISTS public.emails (
   provider text NOT NULL DEFAULT 'imap',
   provider_id text NOT NULL,
   thread_id text,
+  demanda_id uuid REFERENCES public.demandas(id) ON DELETE SET NULL,
+  account_tag text,
   from_name text,
   from_email text,
   subject text,
@@ -22,7 +24,7 @@ CREATE TABLE IF NOT EXISTS public.emails (
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_emails_provider_id
-  ON public.emails(provider, provider_id);
+  ON public.emails(provider, provider_id, account_tag);
 
 CREATE INDEX IF NOT EXISTS idx_emails_received_at
   ON public.emails(received_at DESC);
@@ -32,6 +34,12 @@ CREATE INDEX IF NOT EXISTS idx_emails_due_at
 
 CREATE INDEX IF NOT EXISTS idx_emails_navio
   ON public.emails(navio_id);
+
+CREATE INDEX IF NOT EXISTS idx_emails_demanda
+  ON public.emails(demanda_id);
+
+CREATE INDEX IF NOT EXISTS idx_emails_account_tag
+  ON public.emails(account_tag);
 
 ALTER TABLE public.emails ENABLE ROW LEVEL SECURITY;
 

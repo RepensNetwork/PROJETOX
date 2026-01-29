@@ -81,6 +81,14 @@ export interface Demanda {
   categoria: DemandaCategoria
   titulo: string
   descricao?: string | null
+  pickup_at?: string | null
+  pickup_local?: string | null
+  dropoff_local?: string | null
+  transporte_status?: string | null
+  transporte_modalidade?: string | null
+  transporte_grupo?: string | null
+  transporte_concluido_em?: string | null
+  transporte_legs?: any
   responsavel_id?: string | null
   prioridade: DemandaPrioridade
   status: DemandaStatus
@@ -189,6 +197,8 @@ export interface EmailRegistro {
   provider: string
   provider_id: string
   thread_id?: string | null
+  demanda_id?: string | null
+  account_tag?: string | null
   from_name?: string | null
   from_email?: string | null
   subject?: string | null

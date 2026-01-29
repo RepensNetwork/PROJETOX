@@ -42,7 +42,7 @@ export function SyncEmailsForm({ icon }: SyncEmailsFormProps) {
         setState({
           status: "success",
           imported: 0,
-          message: "Nenhum email novo encontrado.",
+          message: data.message || "Nenhum email novo encontrado.",
         })
       } else {
         setState({

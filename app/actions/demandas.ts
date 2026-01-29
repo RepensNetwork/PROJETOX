@@ -75,6 +75,9 @@ export async function createDemanda(data: {
   categoria: Demanda["categoria"]
   titulo: string
   descricao?: string
+  pickup_at?: string | null
+  pickup_local?: string | null
+  dropoff_local?: string | null
   status: Demanda["status"]
   prioridade: Demanda["prioridade"]
   responsavel_id?: string
@@ -108,6 +111,9 @@ export async function createDemanda(data: {
       categoria: data.categoria,
       titulo: data.titulo.trim(),
       descricao: data.descricao?.trim() || null,
+      pickup_at: data.pickup_at || null,
+      pickup_local: data.pickup_local?.trim() || null,
+      dropoff_local: data.dropoff_local?.trim() || null,
       status: data.status,
       prioridade: data.prioridade,
       responsavel_id: data.responsavel_id || null,
@@ -161,6 +167,9 @@ export async function updateDemanda(
   data: {
     titulo?: string
     descricao?: string
+    pickup_at?: string | null
+    pickup_local?: string | null
+    dropoff_local?: string | null
     status?: Demanda["status"]
     prioridade?: Demanda["prioridade"]
     responsavel_id?: string | null

@@ -104,15 +104,15 @@ export function DemandaForm({
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
-  const getPrazoString = (prazo: string | null | undefined): string => {
-    if (!prazo) return ""
+  const getDateTimeLocal = (value: string | null | undefined): string => {
+    if (!value) return ""
     try {
-      const prazoDate = new Date(prazo)
-      if (!isNaN(prazoDate.getTime())) {
-        return prazoDate.toISOString().slice(0, 16)
+      const date = new Date(value)
+      if (!isNaN(date.getTime())) {
+        return date.toISOString().slice(0, 16)
       }
     } catch (error) {
-      console.error("Erro ao converter prazo:", error)
+      console.error("Erro ao converter data:", error)
     }
     return ""
   }
@@ -126,7 +126,10 @@ export function DemandaForm({
     status: demanda?.status || "pendente",
     prioridade: demanda?.prioridade || "media",
     responsavel_id: demanda?.responsavel_id || "",
-    prazo: getPrazoString(demanda?.prazo),
+    prazo: getDateTimeLocal(demanda?.prazo),
+    pickup_at: getDateTimeLocal(demanda?.pickup_at),
+    pickup_local: demanda?.pickup_local || "",
+    dropoff_local: demanda?.dropoff_local || "",
   })
 
   // Atualizar escala_id quando escalaId mudar
@@ -184,12 +187,32 @@ export function DemandaForm({
         }
       }
 
+      let pickupAtISO: string | undefined = undefined
+      if (formData.pickup_at && formData.pickup_at.trim() !== "") {
+        try {
+          const pickupDate = new Date(formData.pickup_at)
+          if (isNaN(pickupDate.getTime())) {
+            alert("Data de busca inválida. Por favor, verifique o formato.")
+            setLoading(false)
+            return
+          }
+          pickupAtISO = pickupDate.toISOString()
+        } catch (error) {
+          alert("Erro ao processar data de busca. Por favor, verifique o formato.")
+          setLoading(false)
+          return
+        }
+      }
+
       const data = {
         escala_id: escalaId || formData.escala_id,
         tipo: formData.tipo as Demanda["tipo"],
         categoria: formData.categoria as Demanda["categoria"],
         titulo: formData.titulo.trim(),
         descricao: formData.descricao?.trim() || undefined,
+        pickup_at: pickupAtISO,
+        pickup_local: formData.pickup_local?.trim() || undefined,
+        dropoff_local: formData.dropoff_local?.trim() || undefined,
         status: formData.status as Demanda["status"],
         prioridade: formData.prioridade as Demanda["prioridade"],
         responsavel_id: formData.responsavel_id || undefined,
@@ -219,6 +242,9 @@ export function DemandaForm({
             prioridade: "media",
             responsavel_id: "",
             prazo: "",
+            pickup_at: "",
+            pickup_local: "",
+            dropoff_local: "",
           })
         }
       } else {
@@ -345,6 +371,39 @@ export function DemandaForm({
                 placeholder="Descrição detalhada da demanda..."
                 rows={3}
               />
+            </div>
+
+            <div className="rounded-md border bg-muted/30 p-3 space-y-3">
+              <p className="text-xs font-medium text-muted-foreground">Transporte (opcional)</p>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="pickup_at">Horário de busca</Label>
+                  <Input
+                    id="pickup_at"
+                    type="datetime-local"
+                    value={formData.pickup_at}
+                    onChange={(e) => setFormData({ ...formData, pickup_at: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="pickup_local">Local de busca</Label>
+                  <Input
+                    id="pickup_local"
+                    value={formData.pickup_local}
+                    onChange={(e) => setFormData({ ...formData, pickup_local: e.target.value })}
+                    placeholder="Origem / local de pickup"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="dropoff_local">Destino</Label>
+                <Input
+                  id="dropoff_local"
+                  value={formData.dropoff_local}
+                  onChange={(e) => setFormData({ ...formData, dropoff_local: e.target.value })}
+                  placeholder="Destino / local de entrega"
+                />
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
