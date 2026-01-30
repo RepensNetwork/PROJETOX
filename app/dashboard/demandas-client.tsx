@@ -9,10 +9,11 @@ interface DemandasClientProps {
   urgentDemandas: (Demanda & { escala: Escala & { navio: Navio }; responsavel: Membro | null })[]
   recentDemandas: (Demanda & { escala: Escala & { navio: Navio }; responsavel: Membro | null })[]
   todayDemandas: (Demanda & { escala: Escala & { navio: Navio }; responsavel: Membro | null })[]
+  myDemandas: (Demanda & { escala: Escala & { navio: Navio }; responsavel: Membro | null })[]
   membros: Membro[]
 }
 
-export function DemandasClient({ urgentDemandas, recentDemandas, todayDemandas, membros }: DemandasClientProps) {
+export function DemandasClient({ urgentDemandas, recentDemandas, todayDemandas, myDemandas, membros }: DemandasClientProps) {
   const [responsavelFilter, setResponsavelFilter] = useState<string | null>(null)
 
   const filterDemandas = (demandas: typeof urgentDemandas) => {
@@ -42,6 +43,13 @@ export function DemandasClient({ urgentDemandas, recentDemandas, todayDemandas, 
           onFilterChange={setResponsavelFilter}
         />
       </div>
+
+      <DemandasList
+        demandas={myDemandas}
+        title="Minhas demandas"
+        description="Demandas atribuídas a você"
+        emptyMessage="Nenhuma demanda atribuída a você"
+      />
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-6">

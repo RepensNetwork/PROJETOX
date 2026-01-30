@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import type { Demanda, Escala, Navio } from "@/lib/types/database"
+import { buildTransportLegs } from "@/lib/transportes"
 
 export async function getTransportesDoDia(
   date?: string,
@@ -9,11 +10,11 @@ export async function getTransportesDoDia(
 ): Promise<(Demanda & { escala: Escala & { navio: Navio } })[]> {
   const supabase = await createClient()
 
+  /** Apenas demandas de transporte: embarque/desembarque, transporte terrestre, pickup, visita médica, motorista/veículo. */
   const transportTipos: Demanda["tipo"][] = [
     "embarque_passageiros",
     "desembarque_passageiros",
     "visita_medica",
-    "reserva_hotel",
     "transporte_terrestre",
     "pickup_dropoff",
     "motorista",
@@ -103,6 +104,15 @@ export async function getTransportesDoDia(
 
   const targetKey = toDateKey(baseDate)
   const filtered = (data || []).filter((item) => {
+    const legs = buildTransportLegs(item as Demanda)
+    const hasLegOnDate = legs.some((leg) => {
+      if (leg.pickup_at) {
+        return toDateKey(new Date(leg.pickup_at)) === targetKey
+      }
+      return false
+    })
+    if (hasLegOnDate) return true
+
     if (item.pickup_at) {
       return toDateKey(new Date(item.pickup_at)) === targetKey
     }
@@ -125,9 +135,22 @@ export async function getTransportesDoDia(
     return false
   })
 
+  const getEarliestLegTimeOnDay = (item: (typeof filtered)[0]) => {
+    const legs = buildTransportLegs(item as Demanda)
+    let min = Infinity
+    for (const leg of legs) {
+      if (!leg.pickup_at) continue
+      if (toDateKey(new Date(leg.pickup_at)) !== targetKey) continue
+      const t = new Date(leg.pickup_at).getTime()
+      if (t < min) min = t
+    }
+    if (min !== Infinity) return min
+    return item.pickup_at ? new Date(item.pickup_at).getTime() : new Date(item.escala?.data_chegada || 0).getTime()
+  }
+
   return filtered.sort((a, b) => {
-    const aTime = a.pickup_at ? new Date(a.pickup_at).getTime() : new Date(a.escala?.data_chegada || 0).getTime()
-    const bTime = b.pickup_at ? new Date(b.pickup_at).getTime() : new Date(b.escala?.data_chegada || 0).getTime()
+    const aTime = getEarliestLegTimeOnDay(a)
+    const bTime = getEarliestLegTimeOnDay(b)
     return aTime - bTime
   })
 }

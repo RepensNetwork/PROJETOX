@@ -25,6 +25,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Plus, Loader2 } from "lucide-react"
+import { DateTimePickerPopover } from "@/components/ui/datetime-picker-popover"
 import { createDemanda, updateDemanda } from "@/app/actions/demandas"
 import type { Demanda, Escala, Navio, Membro } from "@/lib/types/database"
 
@@ -104,13 +105,11 @@ export function DemandaForm({
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
-  const getDateTimeLocal = (value: string | null | undefined): string => {
+  const getIsoOrEmpty = (value: string | null | undefined): string => {
     if (!value) return ""
     try {
       const date = new Date(value)
-      if (!isNaN(date.getTime())) {
-        return date.toISOString().slice(0, 16)
-      }
+      if (!isNaN(date.getTime())) return date.toISOString()
     } catch (error) {
       console.error("Erro ao converter data:", error)
     }
@@ -126,8 +125,8 @@ export function DemandaForm({
     status: demanda?.status || "pendente",
     prioridade: demanda?.prioridade || "media",
     responsavel_id: demanda?.responsavel_id || "",
-    prazo: getDateTimeLocal(demanda?.prazo),
-    pickup_at: getDateTimeLocal(demanda?.pickup_at),
+    prazo: getIsoOrEmpty(demanda?.prazo),
+    pickup_at: getIsoOrEmpty(demanda?.pickup_at),
     pickup_local: demanda?.pickup_local || "",
     dropoff_local: demanda?.dropoff_local || "",
   })
@@ -378,11 +377,11 @@ export function DemandaForm({
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="pickup_at">Horário de busca</Label>
-                  <Input
+                  <DateTimePickerPopover
                     id="pickup_at"
-                    type="datetime-local"
-                    value={formData.pickup_at}
-                    onChange={(e) => setFormData({ ...formData, pickup_at: e.target.value })}
+                    value={formData.pickup_at || undefined}
+                    placeholder="Selecionar data e hora"
+                    onChange={(iso) => setFormData({ ...formData, pickup_at: iso ?? "" })}
                   />
                 </div>
                 <div className="space-y-2">
@@ -468,11 +467,11 @@ export function DemandaForm({
 
             <div className="space-y-2">
               <Label htmlFor="prazo">Prazo</Label>
-              <Input
+              <DateTimePickerPopover
                 id="prazo"
-                type="datetime-local"
-                value={formData.prazo}
-                onChange={(e) => setFormData({ ...formData, prazo: e.target.value })}
+                value={formData.prazo || undefined}
+                placeholder="Selecionar data e hora"
+                onChange={(iso) => setFormData({ ...formData, prazo: iso ?? "" })}
               />
             </div>
           </div>

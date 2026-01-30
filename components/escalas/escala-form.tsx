@@ -25,6 +25,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Plus, Loader2 } from "lucide-react"
+import { DateTimePickerPopover } from "@/components/ui/datetime-picker-popover"
 import { createEscala, updateEscala } from "@/app/actions/escalas"
 import type { Escala, Navio } from "@/lib/types/database"
 
@@ -62,13 +63,11 @@ export function EscalaForm({ escala, navios, trigger, onSuccess }: EscalaFormPro
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
-  const getDataString = (data: string | null | undefined): string => {
+  const getIsoOrEmpty = (data: string | null | undefined): string => {
     if (!data) return ""
     try {
       const dataDate = new Date(data)
-      if (!isNaN(dataDate.getTime())) {
-        return dataDate.toISOString().slice(0, 16)
-      }
+      if (!isNaN(dataDate.getTime())) return dataDate.toISOString()
     } catch (error) {
       console.error("Erro ao converter data:", error)
     }
@@ -78,8 +77,8 @@ export function EscalaForm({ escala, navios, trigger, onSuccess }: EscalaFormPro
   const [formData, setFormData] = useState({
     navio_id: escala?.navio_id || "",
     porto: escala?.porto || "",
-    data_chegada: getDataString(escala?.data_chegada),
-    data_saida: getDataString(escala?.data_saida),
+    data_chegada: getIsoOrEmpty(escala?.data_chegada),
+    data_saida: getIsoOrEmpty(escala?.data_saida),
     status: escala?.status || "planejada",
     observacoes: escala?.observacoes || "",
   })
@@ -94,9 +93,7 @@ export function EscalaForm({ escala, navios, trigger, onSuccess }: EscalaFormPro
       try {
         if (escala.data_chegada) {
           const dataChegada = new Date(escala.data_chegada)
-          if (!isNaN(dataChegada.getTime())) {
-            dataChegadaStr = dataChegada.toISOString().slice(0, 16)
-          }
+          if (!isNaN(dataChegada.getTime())) dataChegadaStr = dataChegada.toISOString()
         }
       } catch (error) {
         console.error("Erro ao converter data_chegada:", error)
@@ -105,9 +102,7 @@ export function EscalaForm({ escala, navios, trigger, onSuccess }: EscalaFormPro
       try {
         if (escala.data_saida) {
           const dataSaida = new Date(escala.data_saida)
-          if (!isNaN(dataSaida.getTime())) {
-            dataSaidaStr = dataSaida.toISOString().slice(0, 16)
-          }
+          if (!isNaN(dataSaida.getTime())) dataSaidaStr = dataSaida.toISOString()
         }
       } catch (error) {
         console.error("Erro ao converter data_saida:", error)
@@ -286,23 +281,21 @@ export function EscalaForm({ escala, navios, trigger, onSuccess }: EscalaFormPro
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="data_chegada">Data de Chegada *</Label>
-                <Input
+                <DateTimePickerPopover
                   id="data_chegada"
-                  type="datetime-local"
-                  value={formData.data_chegada}
-                  onChange={(e) => setFormData({ ...formData, data_chegada: e.target.value })}
-                  required
+                  value={formData.data_chegada || undefined}
+                  placeholder="Selecionar data e hora"
+                  onChange={(iso) => setFormData({ ...formData, data_chegada: iso ?? "" })}
                 />
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="data_saida">Data de Saída *</Label>
-                <Input
+                <DateTimePickerPopover
                   id="data_saida"
-                  type="datetime-local"
-                  value={formData.data_saida}
-                  onChange={(e) => setFormData({ ...formData, data_saida: e.target.value })}
-                  required
+                  value={formData.data_saida || undefined}
+                  placeholder="Selecionar data e hora"
+                  onChange={(iso) => setFormData({ ...formData, data_saida: iso ?? "" })}
                 />
               </div>
             </div>
@@ -416,23 +409,21 @@ export function EscalaForm({ escala, navios, trigger, onSuccess }: EscalaFormPro
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="data_chegada">Data de Chegada *</Label>
-                      <Input
+                      <DateTimePickerPopover
                         id="data_chegada"
-                        type="datetime-local"
-                        value={formData.data_chegada}
-                        onChange={(e) => setFormData({ ...formData, data_chegada: e.target.value })}
-                        required
+                        value={formData.data_chegada || undefined}
+                        placeholder="Selecionar data e hora"
+                        onChange={(iso) => setFormData({ ...formData, data_chegada: iso ?? "" })}
                       />
                     </div>
 
                     <div className="space-y-2">
                       <Label htmlFor="data_saida">Data de Saída *</Label>
-                      <Input
+                      <DateTimePickerPopover
                         id="data_saida"
-                        type="datetime-local"
-                        value={formData.data_saida}
-                        onChange={(e) => setFormData({ ...formData, data_saida: e.target.value })}
-                        required
+                        value={formData.data_saida || undefined}
+                        placeholder="Selecionar data e hora"
+                        onChange={(iso) => setFormData({ ...formData, data_saida: iso ?? "" })}
                       />
                     </div>
                   </div>

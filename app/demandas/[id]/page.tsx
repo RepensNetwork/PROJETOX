@@ -8,6 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Separator } from "@/components/ui/separator"
 import { DemandaForm } from "@/components/demandas/demanda-form"
 import { StatusChanger } from "@/components/demandas/status-changer"
+import { AssignResponsavel } from "@/components/demandas/assign-responsavel"
 import { getDemandaWithDetails, getEscalasForSelect } from "@/app/actions/demandas"
 import { getMembros } from "@/app/actions/dashboard"
 import { 
@@ -17,7 +18,6 @@ import {
   ArrowLeft,
   Pencil,
   Clock,
-  User,
   AlertTriangle,
   MessageSquare,
   History
@@ -166,28 +166,11 @@ export default async function DemandaDetailPage({ params }: DemandaDetailPagePro
                     </Link>
                   </div>
 
-                  <div>
-                    <h4 className="text-sm font-medium mb-2">Responsável</h4>
-                    {demanda.responsavel ? (
-                      <div className="flex items-center gap-3 p-3 rounded-lg border">
-                        <Avatar className="h-9 w-9">
-                          <AvatarImage src={demanda.responsavel.avatar_url || undefined} />
-                          <AvatarFallback>
-                            {demanda.responsavel.nome.split(" ").map(n => n[0]).join("").slice(0, 2)}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <p className="font-medium text-sm">{demanda.responsavel.nome}</p>
-                          <p className="text-xs text-muted-foreground">{demanda.responsavel.email}</p>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2 p-3 rounded-lg border text-muted-foreground">
-                        <User className="h-5 w-5" />
-                        <span className="text-sm">Sem responsável atribuído</span>
-                      </div>
-                    )}
-                  </div>
+                  <AssignResponsavel
+                    demandaId={demanda.id}
+                    responsavelAtual={demanda.responsavel ?? null}
+                    membros={membros}
+                  />
                 </div>
 
                 <Separator />

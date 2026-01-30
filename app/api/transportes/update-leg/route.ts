@@ -12,6 +12,7 @@ export async function POST(req: Request) {
   const pickup_local = body?.pickup_local as string | undefined
   const dropoff_local = body?.dropoff_local as string | undefined
   const label = body?.label as string | undefined
+  const observacao = body?.observacao as string | undefined
 
   if (!demandaId || !legId) {
     return NextResponse.json({ success: false, error: "demandaId e legId obrigatórios" }, { status: 400 })
@@ -37,6 +38,7 @@ export async function POST(req: Request) {
       pickup_at: pickup_at ?? leg.pickup_at ?? null,
       pickup_local: pickup_local ?? leg.pickup_local ?? null,
       dropoff_local: dropoff_local ?? leg.dropoff_local ?? null,
+      observacao: observacao !== undefined ? observacao || null : leg.observacao ?? null,
     } satisfies TransporteLeg
   })
 

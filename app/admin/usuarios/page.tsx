@@ -6,7 +6,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { getMembros } from "@/app/actions/dashboard"
 import { getCurrentUser } from "@/app/actions/auth"
-import { Users, Shield, User, Mail, Calendar, ArrowLeft } from "lucide-react"
+import { Users, Shield, User, UserPlus, Mail, Calendar, ArrowLeft } from "lucide-react"
 import Link from "next/link"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale/pt-BR"
@@ -101,10 +101,20 @@ export default async function AdminUsuariosPage() {
         {/* Lista de Usuários */}
         <Card>
           <CardHeader>
-            <CardTitle>Todos os Usuários</CardTitle>
-            <CardDescription>
-              {membros.length} usuário{membros.length !== 1 ? 's' : ''} cadastrado{membros.length !== 1 ? 's' : ''}
-            </CardDescription>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <CardTitle>Todos os Usuários</CardTitle>
+                <CardDescription>
+                  {membros.length} usuário{membros.length !== 1 ? "s" : ""} cadastrado{membros.length !== 1 ? "s" : ""}
+                </CardDescription>
+              </div>
+              <Button asChild>
+                <Link href="/admin/usuarios/novo">
+                  <UserPlus className="h-4 w-4 mr-2" />
+                  Criar usuário
+                </Link>
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">

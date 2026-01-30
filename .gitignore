@@ -29,6 +29,9 @@ yarn-error.log*
 # Vercel
 .vercel
 
+# Cursor/VSCode debug profiles
+.vscode/chrome-debug-profile/
+
 # TypeScript
 *.tsbuildinfo
 next-env.d.ts

@@ -9,8 +9,9 @@ import {
   getUrgentDemandas,
   getMembros 
 } from "@/app/actions/dashboard"
-import { getDemandas } from "@/app/actions/demandas"
+import { getDemandas, getDemandasByResponsavel } from "@/app/actions/demandas"
 import { getNavios } from "@/app/actions/navios"
+import { getAlertas } from "@/app/actions/alertas"
 import { getCurrentUser } from "@/app/actions/auth"
 import { redirect } from "next/navigation"
 import Link from "next/link"
@@ -20,8 +21,9 @@ import { Mic } from "lucide-react"
 export default async function DashboardPage() {
   // Verificar autenticação (não bloquear acesso ao dashboard)
   const currentUser = await getCurrentUser()
+  const membroId = currentUser?.membro?.id ?? null
   try {
-    const [stats, escalas, recentDemandas, urgentDemandas, membros, allDemandas, navios] = await Promise.all([
+    const [stats, escalas, recentDemandas, urgentDemandas, membros, allDemandas, navios, myDemandas, alertas] = await Promise.all([
       getDashboardStats().catch(() => ({
         totalEscalasAtivas: 0,
         totalDemandas: 0,
@@ -38,6 +40,8 @@ export default async function DashboardPage() {
       getMembros().catch(() => []),
       getDemandas().catch(() => []),
       getNavios().catch(() => []),
+      membroId ? getDemandasByResponsavel(membroId).catch(() => []) : Promise.resolve([]),
+      getAlertas(10).catch(() => []),
     ])
 
     return (
@@ -54,7 +58,7 @@ export default async function DashboardPage() {
             <Button asChild className="gap-2">
               <Link href="/intake">
                 <Mic className="h-4 w-4" />
-                Gravar demanda
+                Criar demanda
               </Link>
             </Button>
           </div>
@@ -71,6 +75,8 @@ export default async function DashboardPage() {
             urgentDemandas={urgentDemandas}
             recentDemandas={recentDemandas}
             allDemandas={allDemandas}
+            myDemandas={myDemandas}
+            alertas={alertas}
             membros={membros}
             navios={navios}
           />

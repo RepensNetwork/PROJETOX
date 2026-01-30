@@ -14,7 +14,13 @@ Script para criar todas as tabelas, tipos ENUM, índices e políticas RLS do sis
 - Row Level Security (RLS) habilitado
 - Políticas RLS permissivas (para MVP)
 
-### 2. `002_seed_data.sql`
+### 2. `015_create_notificacoes_demanda.sql`
+**Necessário para notificações ao atribuir responsável.** Cria a tabela `notificacoes_demanda` e políticas RLS. Execute no Supabase (SQL Editor) para que o responsável receba notificação no sino quando alguém atribuir uma demanda a ele.
+
+### 3. `016_create_alertas.sql`
+**Necessário para alertas de novas demandas e transportes.** Cria a tabela `alertas` (nova demanda / novo transporte). Execute no Supabase (SQL Editor) para que novas demandas e transportes apareçam no sino e no dashboard como alerta.
+
+### 4. `002_seed_data.sql`
 Script para popular o banco de dados com dados de exemplo.
 
 **Conteúdo:**
@@ -34,6 +40,7 @@ Script para popular o banco de dados com dados de exemplo.
 4. Execute os scripts na ordem:
    - Primeiro: `001_create_tables.sql`
    - Depois: `002_seed_data.sql`
+   - Para notificações de demanda (atribuição de responsável): `015_create_notificacoes_demanda.sql`
 
 ### Via CLI do Supabase
 

@@ -1,7 +1,9 @@
 "use client"
 
 import { useMemo, useState } from "react"
+import Link from "next/link"
 import type { Demanda, Escala, Membro, Navio } from "@/lib/types/database"
+import type { AlertaComDemanda } from "@/app/actions/alertas"
 import { EscalasTimeline } from "@/components/dashboard/escalas-timeline"
 import { DemandasClient } from "./demandas-client"
 import { DashboardFilters } from "@/components/dashboard/dashboard-filters"
@@ -13,15 +15,31 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { AlertTriangle, ClipboardList, Car } from "lucide-react"
+import { formatDistanceToNow } from "date-fns"
+import { ptBR } from "date-fns/locale/pt-BR"
 
 interface DashboardClientProps {
   escalas: (Escala & { navio: Navio; demandas: Demanda[] })[]
   urgentDemandas: (Demanda & { escala: Escala & { navio: Navio }; responsavel: Membro | null })[]
   recentDemandas: (Demanda & { escala: Escala & { navio: Navio }; responsavel: Membro | null })[]
   allDemandas: (Demanda & { escala: Escala & { navio: Navio }; responsavel: Membro | null })[]
+  myDemandas: (Demanda & { escala: Escala & { navio: Navio }; responsavel: Membro | null })[]
+  alertas: AlertaComDemanda[]
   membros: Membro[]
   navios: Navio[]
 }
+
+/** Mesmos tipos considerados "transportes" na tela do motorista (app/actions/transportes.ts). */
+const TRANSPORTE_TIPOS: Demanda["tipo"][] = [
+  "embarque_passageiros",
+  "desembarque_passageiros",
+  "visita_medica",
+  "transporte_terrestre",
+  "pickup_dropoff",
+  "motorista",
+  "veiculo",
+]
 
 const toDateKey = (value?: string | null) => {
   if (!value) return null
@@ -38,6 +56,8 @@ export function DashboardClient({
   urgentDemandas,
   recentDemandas,
   allDemandas,
+  myDemandas,
+  alertas,
   membros,
   navios,
 }: DashboardClientProps) {
@@ -87,6 +107,7 @@ export function DashboardClient({
   const filteredUrgentDemandas = useMemo(() => applyDemandaFilters(urgentDemandas), [urgentDemandas, navioId, dateFilter])
   const filteredRecentDemandas = useMemo(() => applyDemandaFilters(recentDemandas), [recentDemandas, navioId, dateFilter])
   const filteredDemandasHoje = useMemo(() => applyDemandaFilters(demandasHoje), [demandasHoje, navioId, dateFilter])
+  const filteredMyDemandas = useMemo(() => applyDemandaFilters(myDemandas), [myDemandas, navioId, dateFilter])
 
   const hotelDemandas = useMemo(
     () =>
@@ -98,7 +119,7 @@ export function DashboardClient({
   const transporteDemandas = useMemo(
     () =>
       applyDemandaFilters(
-        allDemandas.filter((demanda) => demanda.tipo === "transporte_terrestre")
+        allDemandas.filter((demanda) => TRANSPORTE_TIPOS.includes(demanda.tipo))
       ),
     [allDemandas, navioId, dateFilter]
   )
@@ -149,6 +170,49 @@ export function DashboardClient({
           setDateFilter(null)
         }}
       />
+
+      {alertas.length > 0 && (
+        <Card className="border-primary/30 bg-primary/5">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <AlertTriangle className="h-5 w-5 text-primary" />
+              Alertas — novas demandas e transportes
+            </CardTitle>
+            <CardDescription>
+              Últimas demandas e transportes cadastrados
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-2">
+              {alertas.slice(0, 8).map((alerta) => (
+                <li key={alerta.id}>
+                  <Link
+                    href={`/demandas/${alerta.demanda_id}`}
+                    className="flex items-center gap-3 p-2 rounded-lg border bg-background hover:bg-accent/50 transition-colors"
+                  >
+                    {alerta.tipo === "novo_transporte" ? (
+                      <Car className="h-4 w-4 text-primary shrink-0" />
+                    ) : (
+                      <ClipboardList className="h-4 w-4 text-primary shrink-0" />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">
+                        {alerta.demanda?.titulo || "Demanda"}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {alerta.demanda?.escala?.navio?.nome}
+                        {alerta.demanda?.escala?.porto ? ` • ${alerta.demanda.escala.porto}` : ""}
+                        {" · "}
+                        {formatDistanceToNow(new Date(alerta.created_at), { addSuffix: true, locale: ptBR })}
+                      </p>
+                    </div>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid gap-4 md:grid-cols-2">
         <Card
@@ -258,6 +322,7 @@ export function DashboardClient({
         urgentDemandas={filteredUrgentDemandas}
         recentDemandas={filteredRecentDemandas}
         todayDemandas={filteredDemandasHoje}
+        myDemandas={filteredMyDemandas}
         membros={membros}
       />
 

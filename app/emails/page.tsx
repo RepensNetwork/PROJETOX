@@ -8,6 +8,7 @@ import { getEscalasForSelect } from "@/app/actions/demandas"
 import { Mail, RefreshCw } from "lucide-react"
 import { SyncEmailsForm } from "@/app/emails/sync-emails-form"
 import { EmailsInboxClient } from "@/app/emails/emails-inbox-client"
+import { EmailsDateFilters } from "@/app/emails/emails-date-filters"
 
 interface EmailsPageProps {
   searchParams?: {
@@ -103,14 +104,7 @@ export default async function EmailsPage({ searchParams }: EmailsPageProps) {
             </div>
           </div>
           <div className="grid gap-4 md:grid-cols-4">
-            <div className="space-y-2">
-              <Label htmlFor="from">Recebido de</Label>
-              <Input id="from" name="from" type="date" defaultValue={searchParams?.from || ""} />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="to">Recebido até</Label>
-              <Input id="to" name="to" type="date" defaultValue={searchParams?.to || ""} />
-            </div>
+            <EmailsDateFilters defaultFrom={searchParams?.from} defaultTo={searchParams?.to} />
             <div className="flex items-end gap-2">
               <Button type="submit">Aplicar filtros</Button>
               <Button type="button" variant="outline" asChild>

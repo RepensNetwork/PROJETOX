@@ -1,6 +1,11 @@
+import dynamic from "next/dynamic"
 import { Header } from "@/components/layout/header"
-import { IntakeClient } from "@/app/intake/intake-client"
 import { getEscalasForSelect } from "@/app/actions/demandas"
+
+const IntakeClient = dynamic(
+  () => import("@/app/intake/intake-client").then((m) => m.IntakeClient),
+  { loading: () => <div className="animate-pulse rounded-lg border bg-card p-6 space-y-3"><div className="h-4 w-1/3 rounded bg-muted" /><div className="h-24 rounded bg-muted" /></div> }
+)
 
 export default async function IntakePage() {
   const escalas = await getEscalasForSelect()

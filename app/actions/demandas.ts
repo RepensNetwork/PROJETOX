@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server"
 import type { Demanda, Escala, Navio, Membro, Comentario, Historico } from "@/lib/types/database"
 import { revalidatePath } from "next/cache"
+import { criarAlertasParaDemanda } from "@/app/actions/alertas"
 
 export async function getDemandas(): Promise<(Demanda & { escala: Escala & { navio: Navio }; responsavel: Membro | null })[]> {
   const supabase = await createClient()
@@ -18,6 +19,29 @@ export async function getDemandas(): Promise<(Demanda & { escala: Escala & { nav
 
   if (error) {
     console.error("Error fetching demandas:", error)
+    return []
+  }
+
+  return demandas || []
+}
+
+export async function getDemandasByResponsavel(
+  membroId: string
+): Promise<(Demanda & { escala: Escala & { navio: Navio }; responsavel: Membro | null })[]> {
+  const supabase = await createClient()
+
+  const { data: demandas, error } = await supabase
+    .from("demandas")
+    .select(`
+      *,
+      escala:escalas(*, navio:navios(*)),
+      responsavel:membros(*)
+    `)
+    .eq("responsavel_id", membroId)
+    .order("updated_at", { ascending: false })
+
+  if (error) {
+    console.error("Error fetching demandas by responsavel:", error)
     return []
   }
 
@@ -168,6 +192,13 @@ export async function createDemanda(data: {
       })
     } catch (historyError) {
       console.warn("Erro ao adicionar histórico (não crítico):", historyError)
+    }
+
+    // Alertas: sino + dashboard (nova demanda e, se for transporte, novo transporte)
+    try {
+      await criarAlertasParaDemanda(demanda.id, demanda.tipo)
+    } catch (alertaError) {
+      console.warn("Erro ao criar alerta (não crítico):", alertaError)
     }
 
     revalidatePath("/demandas")

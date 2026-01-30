@@ -3,11 +3,12 @@
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { LayoutDashboard, Ship, Calendar, ClipboardList, Menu, Users, LogOut, User, Shield, Mail, Mic, Car } from "lucide-react"
+import { LayoutDashboard, Ship, Calendar, ClipboardList, Menu, Users, LogOut, User, Shield, Mail, Mic, Car, ChevronDown, FolderOpen, Settings } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { useState, useEffect } from "react"
 import { NotificationBell } from "@/components/notifications/notification-bell"
+import { ThemeToggle } from "@/components/theme-toggle"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
   DropdownMenu,
@@ -20,17 +21,36 @@ import {
 import { createClient } from "@/lib/supabase/client"
 import type { Membro } from "@/lib/types/database"
 
-const navigation = [
+type NavItem = { key: string; name: string; href: string; icon: React.ComponentType<{ className?: string }> }
+
+const primaryNav: NavItem[] = [
   { key: "dashboard", name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { key: "intake", name: "Gravar Demanda", href: "/intake", icon: Mic },
+]
+
+const operacoesNav: NavItem[] = [
+  { key: "intake", name: "Criar Demanda", href: "/intake", icon: Mic },
   { key: "inbox", name: "Inbox", href: "/emails", icon: Mail },
   { key: "transportes", name: "Transportes", href: "/motorista", icon: Car },
-  { key: "navios", name: "Navios", href: "/navios", icon: Ship },
   { key: "escalas", name: "Escalas", href: "/escalas", icon: Calendar },
   { key: "demandas", name: "Demandas", href: "/demandas", icon: ClipboardList },
+]
+
+const sistemaNav: NavItem[] = [
+  { key: "navios", name: "Navios", href: "/navios", icon: Ship },
   { key: "membros", name: "Colaboradores", href: "/membros", icon: Users },
   { key: "logs", name: "Logs", href: "/logs", icon: Shield },
 ]
+
+function canAccess(membro: Membro | null, itemKey: string): boolean {
+  if (!membro) return false
+  if (membro.is_admin) return true
+  const allowed = Array.isArray(membro.allowed_pages) ? membro.allowed_pages : []
+  return allowed.includes(itemKey)
+}
+
+function filterByAccess<T extends { key: string }>(membro: Membro | null, items: T[]): T[] {
+  return items.filter((item) => canAccess(membro, item.key))
+}
 
 export function Header() {
   const pathname = usePathname()
@@ -38,7 +58,9 @@ export function Header() {
   const [open, setOpen] = useState(false)
   const [membro, setMembro] = useState<Membro | null>(null)
   const [loading, setLoading] = useState(true)
-  const [lembretePrioridade, setLembretePrioridade] = useState<string>("Carregando demanda prioritária...")
+  type LembreteItem = { id: string; titulo: string; prioridade: string; prazo: string | null }
+  const [lembretes, setLembretes] = useState<LembreteItem[]>([])
+  const [lembretesLoading, setLembretesLoading] = useState(true)
 
   useEffect(() => {
     loadUser()
@@ -87,12 +109,12 @@ export function Header() {
 
       if (error) {
         console.error("Error loading priority demand:", error)
-        setLembretePrioridade("Nenhuma demanda prioritária no momento")
+        setLembretes([])
         return
       }
 
       if (!demandas || demandas.length === 0) {
-        setLembretePrioridade("Nenhuma demanda prioritária no momento")
+        setLembretes([])
         return
       }
 
@@ -103,26 +125,25 @@ export function Header() {
         baixa: 3,
       }
 
-      const demandaPrioritaria = demandas
+      const ordenadas = demandas
         .slice()
         .sort((a, b) => {
           const prioridadeA = prioridadeOrdem[a.prioridade] ?? 99
           const prioridadeB = prioridadeOrdem[b.prioridade] ?? 99
           if (prioridadeA !== prioridadeB) return prioridadeA - prioridadeB
-
           const prazoA = a.prazo ? new Date(a.prazo).getTime() : Number.MAX_SAFE_INTEGER
           const prazoB = b.prazo ? new Date(b.prazo).getTime() : Number.MAX_SAFE_INTEGER
           return prazoA - prazoB
-        })[0]
+        })
+        .slice(0, 3)
+        .map((d) => ({ id: d.id, titulo: d.titulo, prioridade: d.prioridade, prazo: d.prazo }))
 
-      if (demandaPrioritaria?.titulo) {
-        setLembretePrioridade(`Demanda prioritária: ${demandaPrioritaria.titulo}`)
-      } else {
-        setLembretePrioridade("Nenhuma demanda prioritária no momento")
-      }
+      setLembretes(ordenadas)
     } catch (error) {
       console.error("Error loading priority demand:", error)
-      setLembretePrioridade("Nenhuma demanda prioritária no momento")
+      setLembretes([])
+    } finally {
+      setLembretesLoading(false)
     }
   }
 
@@ -133,40 +154,86 @@ export function Header() {
           <span className="font-semibold text-lg hidden sm:inline-block">Asa Brokers</span>
         </Link>
 
-        {/* Desktop Navigation */}
+        {/* Desktop Navigation: 3 principais + submenus */}
         <nav className="hidden md:flex items-center gap-1">
-          {navigation
-            .filter((item) => {
-              if (!membro) return false
-              if (membro.is_admin) return true
-              const allowed = Array.isArray(membro.allowed_pages) ? membro.allowed_pages : []
-              return allowed.includes(item.key)
-            })
-            .map((item) => {
-            const isActive = pathname === item.href || 
-              (item.href !== "/dashboard" && pathname.startsWith(item.href))
+          {/* 1. Dashboard */}
+          {filterByAccess(membro, primaryNav).map((item) => {
+            const isActive = pathname === item.href
             const Icon = item.icon
-
             return (
-              <Link key={item.name} href={item.href}>
-                <Button 
-                  variant={isActive ? "secondary" : "ghost"} 
-                  size="sm"
-                  className={cn(
-                    "gap-2",
-                    isActive && "bg-secondary"
-                  )}
-                >
+              <Link key={item.key} href={item.href}>
+                <Button variant={isActive ? "secondary" : "ghost"} size="sm" className={cn("gap-2", isActive && "bg-secondary")}>
                   <Icon className="h-4 w-4" />
                   {item.name}
                 </Button>
               </Link>
             )
           })}
+
+          {/* 2. Operações (submenu) */}
+          {filterByAccess(membro, operacoesNav).length > 0 && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant={operacoesNav.some((i) => pathname === i.href || (i.href !== "/dashboard" && pathname.startsWith(i.href))) ? "secondary" : "ghost"}
+                  size="sm"
+                  className="gap-2"
+                >
+                  <FolderOpen className="h-4 w-4" />
+                  Operações
+                  <ChevronDown className="h-4 w-4 opacity-70" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-52">
+                {filterByAccess(membro, operacoesNav).map((item) => {
+                  const Icon = item.icon
+                  return (
+                    <DropdownMenuItem key={item.key} asChild>
+                      <Link href={item.href} className="flex items-center gap-2">
+                        <Icon className="h-4 w-4" />
+                        {item.name}
+                      </Link>
+                    </DropdownMenuItem>
+                  )
+                })}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+
+          {/* 3. Sistema (submenu) */}
+          {filterByAccess(membro, sistemaNav).length > 0 && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant={sistemaNav.some((i) => pathname === i.href || pathname.startsWith(i.href)) ? "secondary" : "ghost"}
+                  size="sm"
+                  className="gap-2"
+                >
+                  <Settings className="h-4 w-4" />
+                  Sistema
+                  <ChevronDown className="h-4 w-4 opacity-70" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-52">
+                {filterByAccess(membro, sistemaNav).map((item) => {
+                  const Icon = item.icon
+                  return (
+                    <DropdownMenuItem key={item.key} asChild>
+                      <Link href={item.href} className="flex items-center gap-2">
+                        <Icon className="h-4 w-4" />
+                        {item.name}
+                      </Link>
+                    </DropdownMenuItem>
+                  )
+                })}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </nav>
 
-        {/* Notificações e Perfil */}
+        {/* Tema, Notificações e Perfil */}
         <div className="ml-auto flex items-center gap-2">
+          <ThemeToggle />
           {membro && <NotificationBell membroId={membro.id} />}
           
           <DropdownMenu>
@@ -219,50 +286,99 @@ export function Header() {
               </Button>
             </SheetTrigger>
             <SheetContent side="left" className="w-64">
-              <div className="flex items-center mb-8">
+              <div className="flex items-center mb-6">
                 <span className="font-semibold text-lg">Asa Brokers</span>
               </div>
-              <nav className="flex flex-col gap-2">
-                {navigation
-                  .filter((item) => {
-                    if (!membro) return false
-                    if (membro.is_admin) return true
-                    const allowed = Array.isArray(membro.allowed_pages) ? membro.allowed_pages : []
-                    return allowed.includes(item.key)
-                  })
-                  .map((item) => {
-                  const isActive = pathname === item.href || 
-                    (item.href !== "/dashboard" && pathname.startsWith(item.href))
+              <nav className="flex flex-col gap-4">
+                {/* Dashboard */}
+                {filterByAccess(membro, primaryNav).map((item) => {
+                  const isActive = pathname === item.href
                   const Icon = item.icon
-
                   return (
-                    <Link 
-                      key={item.name} 
-                      href={item.href}
-                      onClick={() => setOpen(false)}
-                    >
-                      <Button 
-                        variant={isActive ? "secondary" : "ghost"} 
-                        className={cn(
-                          "w-full justify-start gap-2",
-                          isActive && "bg-secondary"
-                        )}
-                      >
+                    <Link key={item.key} href={item.href} onClick={() => setOpen(false)}>
+                      <Button variant={isActive ? "secondary" : "ghost"} className={cn("w-full justify-start gap-2", isActive && "bg-secondary")}>
                         <Icon className="h-4 w-4" />
                         {item.name}
                       </Button>
                     </Link>
                   )
                 })}
+                {/* Operações */}
+                {filterByAccess(membro, operacoesNav).length > 0 && (
+                  <div className="space-y-1">
+                    <p className="px-2 text-xs font-medium text-muted-foreground">Operações</p>
+                    {filterByAccess(membro, operacoesNav).map((item) => {
+                      const isActive = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href))
+                      const Icon = item.icon
+                      return (
+                        <Link key={item.key} href={item.href} onClick={() => setOpen(false)}>
+                          <Button variant={isActive ? "secondary" : "ghost"} size="sm" className={cn("w-full justify-start gap-2 pl-4", isActive && "bg-secondary")}>
+                            <Icon className="h-4 w-4" />
+                            {item.name}
+                          </Button>
+                        </Link>
+                      )
+                    })}
+                  </div>
+                )}
+                {/* Sistema */}
+                {filterByAccess(membro, sistemaNav).length > 0 && (
+                  <div className="space-y-1">
+                    <p className="px-2 text-xs font-medium text-muted-foreground">Sistema</p>
+                    {filterByAccess(membro, sistemaNav).map((item) => {
+                      const isActive = pathname === item.href || pathname.startsWith(item.href)
+                      const Icon = item.icon
+                      return (
+                        <Link key={item.key} href={item.href} onClick={() => setOpen(false)}>
+                          <Button variant={isActive ? "secondary" : "ghost"} size="sm" className={cn("w-full justify-start gap-2 pl-4", isActive && "bg-secondary")}>
+                            <Icon className="h-4 w-4" />
+                            {item.name}
+                          </Button>
+                        </Link>
+                      )
+                    })}
+                  </div>
+                )}
               </nav>
             </SheetContent>
           </Sheet>
         </div>
       </div>
-      <div className="border-t border-border/60">
+      <div className="border-t border-border/60 bg-muted/50">
         <div className="container h-8 overflow-hidden flex items-center">
-          <div className="animate-marquee whitespace-nowrap text-xs text-warning-foreground font-medium">
-            Lembrete mais importante: {lembretePrioridade}
+          <div className="animate-marquee whitespace-nowrap text-xs font-medium flex items-center gap-3">
+            {lembretesLoading ? (
+              <span className="text-muted-foreground">Carregando lembretes...</span>
+            ) : lembretes.length === 0 ? (
+              <span className="text-muted-foreground">Nenhuma demanda prioritária no momento</span>
+            ) : (
+              <>
+                <span className="text-white font-semibold">Lembrete — </span>
+                {lembretes.map((item, i) => {
+                  const cores = ["text-red-500", "text-amber-400", "text-blue-400"] as const
+                  const cor = cores[i % 3]
+                  const prazoStr = item.prazo
+                    ? new Date(item.prazo).toLocaleDateString("pt-BR", {
+                        day: "2-digit",
+                        month: "2-digit",
+                        year: "numeric",
+                      })
+                    : ""
+                  return (
+                    <span key={item.id} className="inline-flex items-center gap-1 shrink-0">
+                      {i > 0 && <span className="text-white font-semibold"> • </span>}
+                      <Link
+                        href={`/demandas/${item.id}`}
+                        className="inline-flex items-center gap-1 hover:underline font-semibold"
+                      >
+                        <span className={cor}>{item.titulo}</span>
+                        {prazoStr && <span className="text-white">({prazoStr})</span>}
+                      </Link>
+                    </span>
+                  )
+                })}
+              </>
+            )}
           </div>
         </div>
       </div>

@@ -1,12 +1,12 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
-import { Loader2, Save, Shield, User, Mail } from "lucide-react"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Loader2, Save, Shield, Upload, Trash2 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -27,7 +27,34 @@ export function EditarUsuarioForm({ membro }: EditarUsuarioFormProps) {
   const [isAdmin, setIsAdmin] = useState(membro.is_admin || false)
   const [allowedPages, setAllowedPages] = useState<string[]>(membro.allowed_pages || [])
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
+  const [avatarFile, setAvatarFile] = useState<File | null>(null)
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(membro.avatar_url ?? null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!file.type.startsWith("image/")) {
+      setMessage({ type: "error", text: "Selecione apenas imagens (JPG, PNG, etc.)." })
+      return
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setMessage({ type: "error", text: "A imagem deve ter no máximo 5MB." })
+      return
+    }
+    setAvatarFile(file)
+    const reader = new FileReader()
+    reader.onload = (ev) => setAvatarPreview(ev.target?.result as string)
+    reader.readAsDataURL(file)
+    setMessage(null)
+  }
+
+  const handleRemovePhoto = () => {
+    setAvatarFile(null)
+    setAvatarPreview(null)
+    if (fileInputRef.current) fileInputRef.current.value = ""
+  }
 
   const pageOptions = [
     { key: "dashboard", label: "Dashboard" },
@@ -37,7 +64,7 @@ export function EditarUsuarioForm({ membro }: EditarUsuarioFormProps) {
     { key: "escalas", label: "Escalas" },
     { key: "demandas", label: "Demandas" },
     { key: "membros", label: "Colaboradores" },
-    { key: "intake", label: "Gravar Demanda" },
+    { key: "intake", label: "Criar Demanda" },
     { key: "perfil", label: "Meu Perfil" },
     { key: "sistema", label: "Sistema" },
     { key: "logs", label: "Logs" },
@@ -50,6 +77,16 @@ export function EditarUsuarioForm({ membro }: EditarUsuarioFormProps) {
     try {
       const supabase = createClient()
 
+      let avatarUrl: string | null = avatarPreview
+      if (avatarFile) {
+        avatarUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onload = () => resolve(reader.result as string)
+          reader.onerror = reject
+          reader.readAsDataURL(avatarFile)
+        })
+      }
+
       const { error } = await supabase
         .from("membros")
         .update({
@@ -58,6 +95,7 @@ export function EditarUsuarioForm({ membro }: EditarUsuarioFormProps) {
           ativo,
           is_admin: isAdmin,
           allowed_pages: isAdmin ? null : allowedPages,
+          avatar_url: avatarUrl,
         })
         .eq("id", membro.id)
 
@@ -66,6 +104,8 @@ export function EditarUsuarioForm({ membro }: EditarUsuarioFormProps) {
       }
 
       setMessage({ type: "success", text: "Usuário atualizado com sucesso!" })
+      setAvatarFile(null)
+      setAvatarPreview(avatarUrl)
       router.refresh()
     } catch (error: any) {
       console.error("Error updating user:", error)
@@ -92,6 +132,54 @@ export function EditarUsuarioForm({ membro }: EditarUsuarioFormProps) {
       )}
 
       <div className="space-y-4">
+        <div className="rounded-lg border p-4 space-y-3">
+          <p className="text-sm font-medium">Foto de perfil</p>
+          <div className="flex flex-wrap items-center gap-4">
+            <Avatar className="h-20 w-20">
+              <AvatarImage src={avatarPreview ?? undefined} />
+              <AvatarFallback className="text-xl">
+                {membro.nome.split(" ").map((n) => n[0]).join("").slice(0, 2)}
+              </AvatarFallback>
+            </Avatar>
+            <div className="flex flex-col gap-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleFileSelect}
+                disabled={loading}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={loading}
+              >
+                <Upload className="h-4 w-4 mr-2" />
+                Escolher foto
+              </Button>
+              {(avatarPreview || membro.avatar_url) && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="text-muted-foreground"
+                  onClick={handleRemovePhoto}
+                  disabled={loading}
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Remover foto
+                </Button>
+              )}
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            JPG, PNG ou GIF. Máximo 5MB.
+          </p>
+        </div>
+
         <div className="space-y-2">
           <Label htmlFor="nome">Nome</Label>
           <Input

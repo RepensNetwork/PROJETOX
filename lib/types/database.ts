@@ -187,6 +187,16 @@ export interface Notificacao {
   membro?: Membro
 }
 
+export interface NotificacaoDemanda {
+  id: string
+  demanda_id: string
+  membro_id: string
+  lida: boolean
+  lida_em?: string | null
+  created_at: string
+  demanda?: Demanda & { escala?: Escala }
+}
+
 export interface LeituraMensagem {
   id: string
   mensagem_id: string

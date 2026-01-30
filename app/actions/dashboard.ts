@@ -66,8 +66,6 @@ export async function getActiveEscalas(): Promise<(Escala & { navio: Navio; dema
 export async function getUpcomingEscalas(): Promise<(Escala & { navio: Navio; demandas: Demanda[] })[]> {
   const supabase = await createClient()
 
-  const today = new Date().toISOString()
-
   const { data: escalas, error } = await supabase
     .from("escalas")
     .select(`
@@ -75,8 +73,7 @@ export async function getUpcomingEscalas(): Promise<(Escala & { navio: Navio; de
       navio:navios(*),
       demandas(*)
     `)
-    .eq("status", "planejada")
-    .gte("data_chegada", today)
+    .in("status", ["planejada", "em_operacao"])
     .order("data_chegada", { ascending: true })
 
   if (error) {

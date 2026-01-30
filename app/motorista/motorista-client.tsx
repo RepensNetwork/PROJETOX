@@ -1,16 +1,30 @@
 "use client"
 
 import { useMemo, useState } from "react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { DateTimePickerPopover } from "@/components/ui/datetime-picker-popover"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import type { Demanda, Escala, Navio } from "@/lib/types/database"
-import { buildTransportLegs } from "@/lib/transportes"
+import { buildTransportLegs, type TransporteLeg } from "@/lib/transportes"
+import { FileDown, CheckCheck } from "lucide-react"
 
 type TransporteItem = Demanda & { escala: Escala & { navio: Navio } }
 
 interface MotoristaClientProps {
   transportes: TransporteItem[]
+  /** Data do filtro no formato dd/mm/yyyy ou "all" */
+  dataFiltro?: string
 }
 
 const statusLabels: Record<string, string> = {
@@ -19,71 +33,191 @@ const statusLabels: Record<string, string> = {
 }
 
 const statusClasses: Record<string, string> = {
-  pendente: "bg-warning/10 text-warning-foreground border-warning/30",
-  concluido: "bg-success/10 text-success-foreground border-success/30",
+  pendente: "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30",
+  concluido: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30",
 }
 
-export function MotoristaClient({ transportes }: MotoristaClientProps) {
+function toDateKey(date: Date): string {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, "0")
+  const d = String(date.getDate()).padStart(2, "0")
+  return `${y}-${m}-${d}`
+}
+
+function parseDataFiltro(value?: string): string | null {
+  if (!value || value.toLowerCase() === "all" || value.toLowerCase() === "todos") return null
+  const m = value.trim().match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
+  if (!m) return null
+  const [, day, month, year] = m
+  return `${year}-${month}-${day}`
+}
+
+export function MotoristaClient({ transportes, dataFiltro }: MotoristaClientProps) {
   const router = useRouter()
   const [loadingId, setLoadingId] = useState<string | null>(null)
   const [savingId, setSavingId] = useState<string | null>(null)
-  const [modalidadeMap, setModalidadeMap] = useState<Record<string, string>>({})
-  const [grupoMap, setGrupoMap] = useState<Record<string, string>>({})
+  const [observacaoMap, setObservacaoMap] = useState<Record<string, string>>({})
   const [pickupMap, setPickupMap] = useState<Record<string, string>>({})
   const [pickupAtMap, setPickupAtMap] = useState<Record<string, string>>({})
   const [dropoffMap, setDropoffMap] = useState<Record<string, string>>({})
-  const [showAll, setShowAll] = useState(true)
+  const [showAll, setShowAll] = useState(false) // false = ocultar concluídos (padrão); true = mostrar todos
   const [message, setMessage] = useState<string | null>(null)
+  const [expandLeg, setExpandLeg] = useState<string | null>(null)
+  const [confirmDialog, setConfirmDialog] = useState<{
+    demandaId: string
+    legId: string
+    tripulanteNome: string
+    numeroViagem: string
+  } | null>(null)
+  const [pdfLoading, setPdfLoading] = useState(false)
 
   const formatDateTime = (value?: string | null) => {
     if (!value) return ""
     const date = new Date(value)
     if (Number.isNaN(date.getTime())) return ""
-    return date.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })
+    return date.toLocaleString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    })
+  }
+
+  const formatTime = (value?: string | null) => {
+    if (!value) return "—"
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return "—"
+    return date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+  }
+
+  /** DD/MM para agrupar por data e não misturar dias (ex.: 31/01 vs 01/02). */
+  const formatDateShort = (value?: string | null) => {
+    if (!value) return ""
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return ""
+    return date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })
   }
 
   const parseDateTime = (value?: string) => {
     if (!value) return null
     const trimmed = value.trim()
+    if (trimmed.includes("T") || /^\d{4}-\d{2}-\d{2}/.test(trimmed)) {
+      const date = new Date(trimmed)
+      return Number.isNaN(date.getTime()) ? null : date.toISOString()
+    }
     const match = trimmed.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})$/)
     if (!match) return null
-    const day = Number(match[1])
-    const month = Number(match[2]) - 1
-    const year = Number(match[3])
-    const hour = Number(match[4])
-    const minute = Number(match[5])
-    const date = new Date(year, month, day, hour, minute, 0)
-    if (Number.isNaN(date.getTime())) return null
-    return date.toISOString()
+    const [, day, month, year, hour, minute] = match
+    const date = new Date(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute), 0)
+    return Number.isNaN(date.getTime()) ? null : date.toISOString()
   }
 
-  const items = useMemo(() => transportes || [], [transportes])
+  /** Data/hora mais próxima para pré-preencher: da perna, ou hoje/amanhã 08:30 */
+  const defaultPickupDate = (leg: TransporteLeg): Date => {
+    if (leg.pickup_at) return new Date(leg.pickup_at)
+    const now = new Date()
+    const today0830 = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 8, 30, 0)
+    if (now <= today0830) return today0830
+    const tomorrow = new Date(now)
+    tomorrow.setDate(tomorrow.getDate() + 1)
+    return new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate(), 8, 30, 0)
+  }
 
-  const handleConfirm = async (id: string, legId: string) => {
+  const targetDateKey = useMemo(() => parseDataFiltro(dataFiltro), [dataFiltro])
+
+  /** Lista de { demanda, leg } para o dia (ou todas), e agrupamento por horário de saída */
+  const { legsNoDia, porHorario, resumo } = useMemo(() => {
+    const items = transportes || []
+    const targetKey = targetDateKey
+    type Entry = { demanda: TransporteItem; leg: TransporteLeg }
+    const entries: Entry[] = []
+
+    for (const demanda of items) {
+      const legs = buildTransportLegs(demanda)
+      for (const leg of legs) {
+        if (targetKey) {
+          const legDate = leg.pickup_at ? toDateKey(new Date(leg.pickup_at)) : null
+          if (legDate !== targetKey) continue
+        }
+        entries.push({ demanda, leg })
+      }
+    }
+
+    /** Agrupa por data + hora para não misturar 31/01 com 01/02 no mesmo bloco. */
+    const porHorario: Record<string, Entry[]> = {}
+    for (const entry of entries) {
+      const leg = entry.leg
+      let slot: string
+      if (leg.pickup_at) {
+        const d = formatDateShort(leg.pickup_at)
+        const t = formatTime(leg.pickup_at)
+        slot = d && t ? `${d} ${t}` : t || "A definir"
+      } else {
+        slot = "A definir"
+      }
+      if (!porHorario[slot]) porHorario[slot] = []
+      porHorario[slot].push(entry)
+    }
+    const slots = Object.keys(porHorario).sort((a, b) => {
+      if (a === "A definir") return 1
+      if (b === "A definir") return -1
+      const entriesA = porHorario[a]!
+      const entriesB = porHorario[b]!
+      const timeA = entriesA[0]?.leg.pickup_at ? new Date(entriesA[0].leg.pickup_at).getTime() : 0
+      const timeB = entriesB[0]?.leg.pickup_at ? new Date(entriesB[0].leg.pickup_at).getTime() : 0
+      return timeA - timeB
+    })
+
+    const pendentes = entries.filter((e) => (e.leg.status || "pendente") === "pendente").length
+    const concluidas = entries.filter((e) => e.leg.status === "concluido").length
+
+    return {
+      legsNoDia: entries,
+      porHorario: slots.map((slot) => ({ slot, entries: porHorario[slot]! })),
+      resumo: { total: entries.length, pendentes, concluidas, viagens: slots.length },
+    }
+  }, [transportes, targetDateKey])
+
+  const openConfirmDialog = (demandaId: string, legId: string, tripulanteNome: string) => {
+    setConfirmDialog({
+      demandaId,
+      legId,
+      tripulanteNome,
+      numeroViagem: "",
+    })
+  }
+
+  const handleConfirmSubmit = async () => {
+    if (!confirmDialog) return
+    const numeroViagem = confirmDialog.numeroViagem.trim()
+    if (!numeroViagem) {
+      setMessage("Informe o número da viagem para confirmar.")
+      return
+    }
     setMessage(null)
-    setLoadingId(legId)
+    setLoadingId(confirmDialog.legId)
     try {
       const response = await fetch("/api/transportes/confirm", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          demandaId: id,
-          legId,
-          modalidade: modalidadeMap[legId] || null,
-          grupo: grupoMap[legId] || null,
+          demandaId: confirmDialog.demandaId,
+          legId: confirmDialog.legId,
+          grupo: numeroViagem,
           status: "concluido",
         }),
       })
       const data = await response.json().catch(() => ({}))
       if (!response.ok) {
-        setMessage(data.error || "Falha ao atualizar transporte.")
+        setMessage(data.error || "Falha ao confirmar transporte.")
         return
       }
-      setMessage("Transporte confirmado com sucesso.")
+      setMessage("Transporte confirmado.")
+      setConfirmDialog(null)
       router.refresh()
     } catch (error) {
-      const text = error instanceof Error ? error.message : "Falha de conexão."
-      setMessage(text)
+      setMessage(error instanceof Error ? error.message : "Falha de conexão.")
     } finally {
       setLoadingId(null)
     }
@@ -102,67 +236,22 @@ export function MotoristaClient({ transportes }: MotoristaClientProps) {
           pickup_at: parseDateTime(pickupAtMap[legId] || "") || null,
           pickup_local: pickupMap[legId] || null,
           dropoff_local: dropoffMap[legId] || null,
+          observacao: observacaoMap[legId]?.trim() || null,
         }),
       })
       const data = await response.json().catch(() => ({}))
       if (!response.ok) {
-        setMessage(data.error || "Falha ao salvar transporte.")
+        setMessage(data.error || "Falha ao salvar.")
         return
       }
-      setMessage("Endereços atualizados.")
+      setMessage("Salvo.")
+      setExpandLeg(null)
       router.refresh()
     } catch (error) {
-      const text = error instanceof Error ? error.message : "Falha de conexão."
-      setMessage(text)
+      setMessage(error instanceof Error ? error.message : "Falha de conexão.")
     } finally {
       setSavingId(null)
     }
-  }
-
-  const concludedLegs = items.flatMap((item) =>
-    buildTransportLegs(item)
-      .filter((leg) => leg.status === "concluido")
-      .map((leg) => ({ demanda: item, leg }))
-  )
-
-  const totalLegs = items.reduce((sum, item) => sum + buildTransportLegs(item).length, 0)
-  const pendingLegs = totalLegs - concludedLegs.length
-  const uniqueDemandas = new Set(items.map((item) => item.id)).size
-
-  const groupedReport = concludedLegs.reduce<Record<string, typeof concludedLegs>>((acc, item) => {
-    const key = item.leg.grupo?.trim() || "Sem grupo"
-    acc[key] = acc[key] || []
-    acc[key].push(item)
-    return acc
-  }, {})
-
-  const handleDownloadReport = () => {
-    if (concludedLegs.length === 0) {
-      setMessage("Nenhum transporte concluído para gerar relatório.")
-      return
-    }
-    const header = ["Demanda", "Navio", "Porto", "Viagem", "Origem", "Destino", "Concluído em", "Modalidade", "Grupo"]
-    const rows = concludedLegs.map(({ demanda, leg }) => [
-      demanda.titulo,
-      demanda.escala?.navio?.nome || "",
-      demanda.escala?.porto || "",
-      leg.label,
-      leg.pickup_local || "",
-      leg.dropoff_local || "",
-      leg.concluido_em ? new Date(leg.concluido_em).toLocaleString("pt-BR") : "",
-      leg.modalidade || "",
-      leg.grupo || "",
-    ])
-    const csv = [header, ...rows]
-      .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
-      .join("\n")
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement("a")
-    link.href = url
-    link.download = "relatorio-transportes-concluidos.csv"
-    link.click()
-    URL.revokeObjectURL(url)
   }
 
   const handleUndo = async (id: string, legId: string) => {
@@ -172,139 +261,234 @@ export function MotoristaClient({ transportes }: MotoristaClientProps) {
       const response = await fetch("/api/transportes/confirm", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          demandaId: id,
-          legId,
-          action: "undo",
-        }),
+        body: JSON.stringify({ demandaId: id, legId, action: "undo" }),
       })
       const data = await response.json().catch(() => ({}))
       if (!response.ok) {
-        setMessage(data.error || "Falha ao reativar transporte.")
+        setMessage(data.error || "Falha ao reativar.")
         return
       }
-      setMessage("Transporte reativado.")
+      setMessage("Reativado.")
       router.refresh()
     } catch (error) {
-      const text = error instanceof Error ? error.message : "Falha de conexão."
-      setMessage(text)
+      setMessage(error instanceof Error ? error.message : "Falha de conexão.")
     } finally {
       setLoadingId(null)
     }
   }
 
+  const concludedForReport = legsNoDia.filter((e) => e.leg.status === "concluido")
+  const groupedReport = useMemo(() => {
+    const acc: Record<string, typeof concludedForReport> = {}
+    for (const entry of concludedForReport) {
+      const key = entry.leg.grupo?.trim() || "Sem grupo"
+      if (!acc[key]) acc[key] = []
+      acc[key].push(entry)
+    }
+    return acc
+  }, [concludedForReport])
+
+  const handleGerarPDF = async () => {
+    if (legsNoDia.length === 0) {
+      setMessage("Nenhum transporte para gerar o PDF.")
+      return
+    }
+    setMessage(null)
+    setPdfLoading(true)
+    try {
+      const { gerarRelatorioTransportesPDF } = await import("@/lib/relatorio-transportes-pdf")
+      await gerarRelatorioTransportesPDF({
+        porHorario,
+        resumo,
+        dataFiltro: dataFiltro ?? undefined,
+      })
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Erro ao gerar PDF.")
+    } finally {
+      setPdfLoading(false)
+    }
+  }
+
+  const handleDownloadReport = () => {
+    if (concludedForReport.length === 0) {
+      setMessage("Nenhum transporte concluído para gerar relatório.")
+      return
+    }
+    const header = [
+      "Tripulante",
+      "Demanda (ID)",
+      "Navio",
+      "Porto",
+      "Viagem",
+      "Nº viagem",
+      "Origem",
+      "Destino",
+      "Concluído em",
+      "Observação (voo/obs)",
+    ]
+    const rows = concludedForReport.map(({ demanda, leg }) => [
+      demanda.titulo,
+      demanda.id,
+      demanda.escala?.navio?.nome || "",
+      demanda.escala?.porto || "",
+      leg.label,
+      leg.grupo?.trim() || "",
+      leg.pickup_local || "",
+      leg.dropoff_local || "",
+      leg.concluido_em ? new Date(leg.concluido_em).toLocaleString("pt-BR") : "",
+      leg.observacao?.trim() || "",
+    ])
+    const csv = [header, ...rows]
+      .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+      .join("\n")
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement("a")
+    link.href = url
+    link.download = "relatorio-viagens-tripulantes.csv"
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <div className="space-y-4">
-      {message && <p className="text-sm text-muted-foreground">{message}</p>}
-      <div className="rounded-lg border bg-card p-4">
-        <div className="flex flex-wrap items-center gap-4 text-sm">
-          <span>Demandas: {uniqueDemandas}</span>
-          <span>Viagens: {totalLegs}</span>
-          <span>Pendentes: {pendingLegs}</span>
-          <span>Concluídas: {concludedLegs.length}</span>
+      {message && (
+        <p className="rounded-md border bg-muted/50 px-3 py-2 text-sm text-muted-foreground">{message}</p>
+      )}
+
+      <div className="rounded-xl border bg-card p-4 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold">Resumo do dia</h2>
+            <p className="text-sm text-muted-foreground">
+              {resumo.total} viagem(ns) em {resumo.viagens} horário(s) • {resumo.pendentes} pendente(s) •{" "}
+              {resumo.concluidas} concluída(s)
+            </p>
+          </div>
+          <div className="flex gap-2 flex-wrap items-center">
+            <Button type="button" variant="outline" size="sm" onClick={() => setShowAll((p) => !p)}>
+              {showAll ? "Ocultar concluídos" : "Mostrar todos"}
+            </Button>
+            {resumo.concluidas > 0 && (
+              <Button
+                type="button"
+                variant={showAll ? "secondary" : "outline"}
+                size="sm"
+                className="gap-1.5"
+                onClick={() => setShowAll(true)}
+                title={showAll ? "Concluídas visíveis" : "Ver concluídas"}
+              >
+                <CheckCheck className="h-4 w-4 text-success" />
+                <span>Concluídas ({resumo.concluidas})</span>
+              </Button>
+            )}
+            <Button
+              type="button"
+              variant="default"
+              size="sm"
+              onClick={handleGerarPDF}
+              disabled={pdfLoading || legsNoDia.length === 0}
+            >
+              <FileDown className="h-4 w-4 mr-1.5" />
+              {pdfLoading ? "Gerando PDF…" : "Gerar PDF"}
+            </Button>
+            <Button type="button" variant="outline" size="sm" onClick={handleDownloadReport}>
+              Relatório viagens (CSV)
+            </Button>
+          </div>
         </div>
       </div>
-      <div className="rounded-lg border bg-card">
-        {items.length === 0 ? (
-          <div className="p-8 text-center text-muted-foreground">
-            Nenhum transporte encontrado para o dia selecionado.
-          </div>
-        ) : (
-          <div className="divide-y">
-            {items.map((item) => {
-              const legs = buildTransportLegs(item)
-              return (
-                <div key={item.id} className="p-4 flex flex-col gap-4">
-                  <div className="space-y-1">
-                    <p className="font-medium">{item.titulo}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {item.escala?.navio?.nome || "Navio não informado"} • {item.escala?.porto || "Porto"}
-                    </p>
-                    {item.escala?.data_chegada && (
-                      <p className="text-xs text-muted-foreground">
-                        Escala: {new Date(item.escala.data_chegada).toLocaleString("pt-BR")}
-                      </p>
-                    )}
-                  </div>
-                  <div className="grid gap-3">
-                    {legs.filter((leg) => showAll || leg.status !== "concluido").map((leg) => {
-                      const status = leg.status || "pendente"
-                      return (
-                        <div key={leg.id} className="rounded-md border p-3 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-                          <div className="space-y-1">
-                            <p className="text-sm font-medium">{leg.label}</p>
-                            <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-                              {leg.pickup_at && (
-                                <span>Busca: {new Date(leg.pickup_at).toLocaleString("pt-BR")}</span>
+
+      {legsNoDia.length === 0 ? (
+        <div className="rounded-xl border bg-card p-8 text-center text-muted-foreground">
+          Nenhum transporte no dia selecionado.
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {porHorario.map(({ slot, entries }) => {
+            const toShow = showAll ? entries : entries.filter((e) => (e.leg.status || "pendente") !== "concluido")
+            if (toShow.length === 0) return null
+
+            return (
+              <section key={slot} className="rounded-xl border bg-card shadow-sm overflow-hidden">
+                <div className="bg-muted/60 px-4 py-3 border-b">
+                  <h3 className="font-semibold text-foreground">
+                    {slot === "A definir" ? "Viagem a definir" : slot.includes(" ") ? `Viagem em ${slot.split(" ")[0]} às ${slot.split(" ")[1]}` : `Viagem às ${slot}`}
+                    <span className="ml-2 text-sm font-normal text-muted-foreground">
+                      ({toShow.length} {toShow.length === 1 ? "tripulante" : "tripulantes"})
+                    </span>
+                  </h3>
+                </div>
+                <ul className="divide-y">
+                  {toShow.map(({ demanda, leg }) => {
+                    const status = leg.status || "pendente"
+                    const legKey = `${demanda.id}-${leg.id}`
+                    const isExpanded = expandLeg === legKey
+                    const origem = pickupMap[leg.id] ?? leg.pickup_local ?? "—"
+                    const destino = dropoffMap[leg.id] ?? leg.dropoff_local ?? "—"
+                    const obs = observacaoMap[leg.id] ?? leg.observacao ?? ""
+
+                    return (
+                      <li key={legKey} className="p-4">
+                        <p className="font-medium text-foreground mb-2">
+                          <Link
+                            href={`/demandas/${demanda.id}`}
+                            className="text-primary hover:underline focus:outline-none focus:ring-2 focus:ring-primary rounded"
+                          >
+                            {demanda.titulo}
+                          </Link>
+                        </p>
+                        <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-2">
+                          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                            Transporte
+                          </p>
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm text-foreground">
+                                {origem} → {destino}
+                              </p>
+                              {obs && (
+                                <p className="text-xs text-muted-foreground mt-0.5">Voo/obs: {obs}</p>
                               )}
-                              {!leg.pickup_at && <span>Busca: a definir</span>}
-                              {leg.pickup_local && <span>Origem: {leg.pickup_local}</span>}
-                              {leg.dropoff_local && <span>Destino: {leg.dropoff_local}</span>}
+                              {status === "concluido" && leg.grupo?.trim() && (
+                                <p className="text-xs text-muted-foreground mt-0.5">Nº viagem: {leg.grupo.trim()}</p>
+                              )}
+                              <div className="mt-1.5 flex items-center gap-2">
+                                <Badge variant="outline" className={`text-xs ${statusClasses[status]}`}>
+                                  {statusLabels[status]}
+                                </Badge>
+                                {leg.pickup_at && (
+                                  <span className="text-xs text-muted-foreground">
+                                    Busca: {formatDateTime(leg.pickup_at)}
+                                  </span>
+                                )}
+                              </div>
                             </div>
-                          </div>
-                          <div className="flex flex-col gap-2 min-w-[260px]">
-                            <Badge variant="outline" className={statusClasses[status] || ""}>
-                              {statusLabels[status] || status}
-                            </Badge>
-                            <div className="grid gap-2">
-                              <input
-                                type="text"
-                                inputMode="numeric"
-                                placeholder="dd/mm/aaaa hh:mm"
-                                value={pickupAtMap[leg.id] ?? formatDateTime(leg.pickup_at)}
-                                onChange={(event) =>
-                                  setPickupAtMap((prev) => ({ ...prev, [leg.id]: event.target.value }))
-                                }
-                                className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
-                              />
-                              <input
-                                value={pickupMap[leg.id] ?? leg.pickup_local ?? ""}
-                                onChange={(event) =>
-                                  setPickupMap((prev) => ({ ...prev, [leg.id]: event.target.value }))
-                                }
-                                className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
-                                placeholder="Origem"
-                              />
-                              <input
-                                value={dropoffMap[leg.id] ?? leg.dropoff_local ?? ""}
-                                onChange={(event) =>
-                                  setDropoffMap((prev) => ({ ...prev, [leg.id]: event.target.value }))
-                                }
-                                className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
-                                placeholder="Destino"
-                              />
+                            <div className="flex flex-wrap items-center gap-2 shrink-0">
                               <Button
                                 type="button"
-                                variant="outline"
-                                onClick={() => handleSave(item.id, leg.id)}
-                                disabled={savingId === leg.id}
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setExpandLeg(isExpanded ? null : legKey)}
                               >
-                                {savingId === leg.id ? "Salvando..." : "Salvar endereços"}
+                                {isExpanded ? "Fechar" : "Editar"}
                               </Button>
-                              <input
-                                value={grupoMap[leg.id] ?? leg.grupo ?? ""}
-                                onChange={(event) =>
-                                  setGrupoMap((prev) => ({ ...prev, [leg.id]: event.target.value }))
-                                }
-                                className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
-                                placeholder="Nº da viagem / observação"
-                              />
-                              <Button
-                                type="button"
-                                onClick={() => handleConfirm(item.id, leg.id)}
-                                disabled={loadingId === leg.id || status === "concluido"}
-                              >
-                                {status === "concluido"
-                                  ? "Concluído"
-                                  : loadingId === leg.id
-                                    ? "Confirmando..."
-                                    : "Confirmar concluído"}
-                              </Button>
+                              {status !== "concluido" && (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  onClick={() => openConfirmDialog(demanda.id, leg.id, demanda.titulo)}
+                                  disabled={loadingId === leg.id}
+                                >
+                                  {loadingId === leg.id ? "..." : "Confirmar"}
+                                </Button>
+                              )}
                               {status === "concluido" && (
                                 <Button
                                   type="button"
-                                  variant="ghost"
-                                  onClick={() => handleUndo(item.id, leg.id)}
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleUndo(demanda.id, leg.id)}
                                   disabled={loadingId === leg.id}
                                 >
                                   Reativar
@@ -313,62 +497,146 @@ export function MotoristaClient({ transportes }: MotoristaClientProps) {
                             </div>
                           </div>
                         </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
-      </div>
 
-      <div className="rounded-lg border bg-card p-4 space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <p className="font-medium">Relatório de transportes concluídos</p>
-            <p className="text-sm text-muted-foreground">{concludedLegs.length} viagem(ns) concluída(s)</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setShowAll((prev) => !prev)}
-            >
-              {showAll ? "Ocultar concluídos" : "Mostrar todos"}
-            </Button>
-            <Button type="button" variant="outline" onClick={handleDownloadReport}>
-              Baixar CSV
-            </Button>
-          </div>
+                        {isExpanded && (
+                          <div className="mt-4 rounded-lg border bg-muted/30 p-3 space-y-2">
+                            <div className="grid gap-2 sm:grid-cols-2">
+                              <div className="space-y-1">
+                                <label htmlFor={`pickup-${leg.id}`} className="text-xs font-medium text-muted-foreground">
+                                  Data e hora da busca
+                                </label>
+                                <DateTimePickerPopover
+                                  id={`pickup-${leg.id}`}
+                                  value={
+                                    leg.id in pickupAtMap
+                                      ? (pickupAtMap[leg.id] || null)
+                                      : (leg.pickup_at || undefined)
+                                  }
+                                  defaultDate={defaultPickupDate(leg)}
+                                  placeholder="Selecionar data e hora"
+                                  onChange={(iso) =>
+                                    setPickupAtMap((p) => ({ ...p, [leg.id]: iso ?? "" }))
+                                  }
+                                />
+                              </div>
+                              <input
+                                placeholder="Origem"
+                                value={pickupMap[leg.id] ?? leg.pickup_local ?? ""}
+                                onChange={(e) => setPickupMap((p) => ({ ...p, [leg.id]: e.target.value }))}
+                                className="h-9 rounded-md border bg-background px-2 text-sm"
+                              />
+                              <input
+                                placeholder="Destino"
+                                value={dropoffMap[leg.id] ?? leg.dropoff_local ?? ""}
+                                onChange={(e) => setDropoffMap((p) => ({ ...p, [leg.id]: e.target.value }))}
+                                className="h-9 rounded-md border bg-background px-2 text-sm sm:col-span-2"
+                              />
+                              <div className="space-y-1 sm:col-span-2">
+                                <Label className="text-xs font-medium text-muted-foreground">
+                                  Voo / observação
+                                </Label>
+                                <input
+                                  placeholder="Voo, observação, etc."
+                                  value={observacaoMap[leg.id] ?? leg.observacao ?? ""}
+                                  onChange={(e) => setObservacaoMap((p) => ({ ...p, [leg.id]: e.target.value }))}
+                                  className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+                                />
+                              </div>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => handleSave(demanda.id, leg.id)}
+                              disabled={savingId === leg.id}
+                            >
+                              {savingId === leg.id ? "Salvando..." : "Salvar"}
+                            </Button>
+                          </div>
+                        )}
+                      </li>
+                    )
+                  })}
+                </ul>
+              </section>
+            )
+          })}
         </div>
-        {concludedLegs.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Nenhuma viagem concluída no filtro atual.</p>
-        ) : (
-          <div className="space-y-3">
-            {Object.entries(groupedReport).map(([group, items]) => (
-              <div key={group} className="rounded-md border p-3">
-                <p className="text-sm font-medium">Nº da viagem: {group}</p>
-                <p className="text-xs text-muted-foreground">{items.length} tripulante(s)</p>
-                <div className="divide-y">
+      )}
+
+      {concludedForReport.length > 0 && (
+        <div className="rounded-xl border bg-card p-4">
+          <h3 className="font-semibold mb-2">Relatório por viagem (concluídos)</h3>
+          <p className="text-sm text-muted-foreground mb-3">
+            Tripulantes agrupados pelo <strong>Nº viagem</strong> informado na confirmação.
+          </p>
+          <div className="space-y-2">
+            {Object.entries(groupedReport).map(([grupo, items]) => (
+              <div key={grupo} className="rounded-md border p-3 text-sm">
+                <p className="font-medium text-muted-foreground mb-1.5">
+                  Nº viagem: {grupo}
+                </p>
+                <ul className="space-y-1">
                   {items.map(({ demanda, leg }) => (
-                    <div key={`${demanda.id}-${leg.id}`} className="py-2 text-xs">
-                      <p className="font-medium">{demanda.titulo}</p>
-                      <p className="text-muted-foreground">
-                        {demanda.escala?.navio?.nome || "Navio"} • {demanda.escala?.porto || "Porto"} • {leg.label}
-                      </p>
-                      <p className="text-muted-foreground">
-                        {leg.pickup_local || "Origem"} → {leg.dropoff_local || "Destino"} •{" "}
-                        {leg.concluido_em ? new Date(leg.concluido_em).toLocaleString("pt-BR") : "Concluído"}
-                      </p>
-                    </div>
+                    <li key={leg.id} className="text-foreground flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                      <Link
+                        href={`/demandas/${demanda.id}`}
+                        className="text-primary hover:underline"
+                      >
+                        {demanda.titulo}
+                      </Link>
+                      <span className="text-muted-foreground">
+                        {leg.pickup_local || "—"} → {leg.dropoff_local || "—"}
+                      </span>
+                    </li>
                   ))}
-                </div>
+                </ul>
               </div>
             ))}
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      <Dialog open={!!confirmDialog} onOpenChange={(open) => !open && setConfirmDialog(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirmar transporte</DialogTitle>
+          </DialogHeader>
+          {confirmDialog && (
+            <>
+              <p className="text-sm text-muted-foreground">
+                Tripulante: <strong>{confirmDialog.tripulanteNome}</strong>
+              </p>
+              <div className="space-y-2">
+                <Label htmlFor="numero-viagem">
+                  Número da viagem <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="numero-viagem"
+                  placeholder="Ex.: 1, Viagem 1, Carro A"
+                  value={confirmDialog.numeroViagem}
+                  onChange={(e) =>
+                    setConfirmDialog((p) => p ? { ...p, numeroViagem: e.target.value } : null)
+                  }
+                  autoFocus
+                />
+              </div>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setConfirmDialog(null)}>
+                  Cancelar
+                </Button>
+                <Button
+                  type="button"
+                  onClick={handleConfirmSubmit}
+                  disabled={!confirmDialog.numeroViagem.trim() || loadingId === confirmDialog.legId}
+                >
+                  {loadingId === confirmDialog.legId ? "Confirmando..." : "Confirmar"}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

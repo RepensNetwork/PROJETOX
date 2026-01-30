@@ -1,7 +1,6 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
   Select,
@@ -11,7 +10,8 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Card, CardContent } from "@/components/ui/card"
-import { Calendar, Filter, Ship, X } from "lucide-react"
+import { DateTimePickerPopover } from "@/components/ui/datetime-picker-popover"
+import { Filter, Ship, X } from "lucide-react"
 import type { Navio } from "@/lib/types/database"
 
 interface DashboardFiltersProps {
@@ -69,15 +69,13 @@ export function DashboardFilters({
             <Label htmlFor="filter-date" className="text-sm text-muted-foreground">
               Filtrar por data
             </Label>
-            <div className="flex items-center gap-2">
-              <Calendar className="h-4 w-4 text-muted-foreground" />
-              <Input
-                id="filter-date"
-                type="date"
-                value={dateFilter || ""}
-                onChange={(event) => onDateChange(event.target.value || null)}
-              />
-            </div>
+            <DateTimePickerPopover
+              id="filter-date"
+              mode="date"
+              value={dateFilter ? new Date(dateFilter + "T12:00:00").toISOString() : undefined}
+              placeholder="Selecionar data"
+              onChange={(iso) => onDateChange(iso ? iso.slice(0, 10) : null)}
+            />
           </div>
 
           <Button

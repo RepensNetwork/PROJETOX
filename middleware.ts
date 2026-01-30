@@ -1,6 +1,18 @@
 import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
 
+const SECURITY_HEADERS: [string, string][] = [
+  ["X-Frame-Options", "DENY"],
+  ["X-Content-Type-Options", "nosniff"],
+  ["Referrer-Policy", "strict-origin-when-cross-origin"],
+  ["Permissions-Policy", "camera=(self), microphone=(self), geolocation=(), browsing-topics=()"],
+]
+
+function applySecurityHeaders(res: NextResponse): NextResponse {
+  SECURITY_HEADERS.forEach(([key, value]) => res.headers.set(key, value))
+  return res
+}
+
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({
     request: {
@@ -75,7 +87,7 @@ export async function middleware(request: NextRequest) {
   if (!user && !isPublicRoute) {
     const url = request.nextUrl.clone()
     url.pathname = "/login"
-    return NextResponse.redirect(url)
+    return applySecurityHeaders(NextResponse.redirect(url))
   }
 
   if (user) {
@@ -83,7 +95,7 @@ export async function middleware(request: NextRequest) {
     if (request.nextUrl.pathname === "/login") {
       const url = request.nextUrl.clone()
       url.pathname = "/dashboard"
-      return NextResponse.redirect(url)
+      return applySecurityHeaders(NextResponse.redirect(url))
     }
 
     const { data: membro, error: membroError } = await supabase
@@ -97,7 +109,7 @@ export async function middleware(request: NextRequest) {
       const url = request.nextUrl.clone()
       url.pathname = "/login"
       url.searchParams.set("error", "member_missing")
-      return NextResponse.redirect(url)
+      return applySecurityHeaders(NextResponse.redirect(url))
     }
 
     if (!membro.ativo) {
@@ -105,7 +117,7 @@ export async function middleware(request: NextRequest) {
       const url = request.nextUrl.clone()
       url.pathname = "/login"
       url.searchParams.set("error", "inactive")
-      return NextResponse.redirect(url)
+      return applySecurityHeaders(NextResponse.redirect(url))
     }
 
     const currentIp = getClientIp()
@@ -120,20 +132,20 @@ export async function middleware(request: NextRequest) {
       const permissionKey = resolvePermissionKey(request.nextUrl.pathname)
       if (permissionKey) {
         if (permissionKey === "perfil") {
-          return response
+          return applySecurityHeaders(response)
         }
         const allowed = Array.isArray(membro.allowed_pages) ? membro.allowed_pages : []
         if (!allowed.includes(permissionKey)) {
           const url = request.nextUrl.clone()
           url.pathname = "/dashboard"
           url.searchParams.set("denied", "1")
-          return NextResponse.redirect(url)
+          return applySecurityHeaders(NextResponse.redirect(url))
         }
       }
     }
   }
 
-  return response
+  return applySecurityHeaders(response)
 }
 
 export const config = {

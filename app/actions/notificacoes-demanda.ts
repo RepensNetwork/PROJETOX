@@ -1,51 +1,46 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import type { Notificacao, Membro, Mensagem } from "@/lib/types/database"
 import { revalidatePath } from "next/cache"
+import type { NotificacaoDemanda, Demanda, Escala, Navio } from "@/lib/types/database"
 
-export async function criarNotificacoes(
-  mensagemId: string,
-  escalaId: string,
-  membrosMencionados: string[]
+export async function criarNotificacaoDemanda(
+  demandaId: string,
+  membroId: string
 ): Promise<{ success: boolean; error?: string }> {
   const supabase = await createClient()
 
-  if (membrosMencionados.length === 0) {
-    return { success: true }
-  }
-
-  const notificacoes = membrosMencionados.map(membroId => ({
-    mensagem_id: mensagemId,
+  const { error } = await supabase.from("notificacoes_demanda").insert({
+    demanda_id: demandaId,
     membro_id: membroId,
-    escala_id: escalaId,
     lida: false,
-  }))
-
-  const { error } = await supabase
-    .from("notificacoes")
-    .insert(notificacoes)
+  })
 
   if (error) {
-    console.error("Error creating notificacoes:", error)
+    console.error("Error creating notificacao demanda:", error)
     return { success: false, error: error.message }
   }
 
-  revalidatePath(`/escalas/${escalaId}`)
+  revalidatePath(`/demandas/${demandaId}`)
+  revalidatePath("/dashboard")
   return { success: true }
 }
 
-export async function getNotificacoes(
+export type NotificacaoDemandaComDemanda = NotificacaoDemanda & {
+  demanda?: Demanda & { escala?: Escala & { navio?: Navio } }
+}
+
+export async function getNotificacoesDemanda(
   membroId: string,
   lidas?: boolean
-): Promise<(Notificacao & { mensagem: Mensagem & { autor: Membro } })[]> {
+): Promise<NotificacaoDemandaComDemanda[]> {
   const supabase = await createClient()
 
   let query = supabase
-    .from("notificacoes")
+    .from("notificacoes_demanda")
     .select(`
       *,
-      mensagem:mensagens(*, autor:membros(*))
+      demanda:demandas(*, escala:escalas(*, navio:navios(*)))
     `)
     .eq("membro_id", membroId)
     .order("created_at", { ascending: false })
@@ -54,26 +49,26 @@ export async function getNotificacoes(
     query = query.eq("lida", lidas)
   }
 
-  const { data: notificacoes, error } = await query
+  const { data, error } = await query
 
   if (error) {
-    console.error("Error fetching notificacoes:", error)
+    console.error("Error fetching notificacoes demanda:", error)
     return []
   }
 
-  return (notificacoes || []).map(n => ({
+  return (data || []).map((n: any) => ({
     ...n,
-    mensagem: (n as any).mensagem || null,
+    demanda: n.demanda ?? null,
   }))
 }
 
-export async function marcarNotificacaoComoLida(
+export async function marcarNotificacaoDemandaComoLida(
   notificacaoId: string
 ): Promise<{ success: boolean; error?: string }> {
   const supabase = await createClient()
 
   const { error } = await supabase
-    .from("notificacoes")
+    .from("notificacoes_demanda")
     .update({
       lida: true,
       lida_em: new Date().toISOString(),
@@ -81,31 +76,20 @@ export async function marcarNotificacaoComoLida(
     .eq("id", notificacaoId)
 
   if (error) {
-    console.error("Error updating notificacao:", error)
+    console.error("Error updating notificacao demanda:", error)
     return { success: false, error: error.message }
-  }
-
-  // Revalidar para atualizar contadores
-  const { data: notificacao } = await supabase
-    .from("notificacoes")
-    .select("escala_id")
-    .eq("id", notificacaoId)
-    .single()
-
-  if (notificacao) {
-    revalidatePath(`/escalas/${notificacao.escala_id}`)
   }
 
   return { success: true }
 }
 
-export async function marcarTodasNotificacoesComoLidas(
+export async function marcarTodasNotificacoesDemandaComoLidas(
   membroId: string
 ): Promise<{ success: boolean; error?: string }> {
   const supabase = await createClient()
 
   const { error } = await supabase
-    .from("notificacoes")
+    .from("notificacoes_demanda")
     .update({
       lida: true,
       lida_em: new Date().toISOString(),
@@ -114,44 +98,44 @@ export async function marcarTodasNotificacoesComoLidas(
     .eq("lida", false)
 
   if (error) {
-    console.error("Error updating notificacoes:", error)
+    console.error("Error updating notificacoes demanda:", error)
     return { success: false, error: error.message }
   }
 
   return { success: true }
 }
 
-export async function getContadorNotificacoesNaoLidas(
+export async function getContadorNotificacoesDemandaNaoLidas(
   membroId: string
 ): Promise<number> {
   const supabase = await createClient()
 
   const { count, error } = await supabase
-    .from("notificacoes")
+    .from("notificacoes_demanda")
     .select("*", { count: "exact", head: true })
     .eq("membro_id", membroId)
     .eq("lida", false)
 
   if (error) {
-    console.error("Error counting notificacoes:", error)
+    console.error("Error counting notificacoes demanda:", error)
     return 0
   }
 
-  return count || 0
+  return count ?? 0
 }
 
-export async function limparTodasNotificacoes(
+export async function limparTodasNotificacoesDemanda(
   membroId: string
 ): Promise<{ success: boolean; error?: string }> {
   const supabase = await createClient()
 
   const { error } = await supabase
-    .from("notificacoes")
+    .from("notificacoes_demanda")
     .delete()
     .eq("membro_id", membroId)
 
   if (error) {
-    console.error("Error clearing notificacoes:", error)
+    console.error("Error clearing notificacoes demanda:", error)
     return { success: false, error: error.message }
   }
 
