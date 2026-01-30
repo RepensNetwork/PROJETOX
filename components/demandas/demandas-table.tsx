@@ -13,6 +13,8 @@ import {
 } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Switch } from "@/components/ui/switch"
+import { Label } from "@/components/ui/label"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
   DropdownMenu,
@@ -88,7 +90,12 @@ export function DemandasTable({ demandas, escalas, membros }: DemandasTableProps
   const router = useRouter()
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [showConcluidas, setShowConcluidas] = useState(false)
 
+  const filteredDemandas = showConcluidas
+    ? demandas
+    : demandas.filter((d) => d.status !== "concluida")
+  const concluidasCount = demandas.filter((d) => d.status === "concluida").length
   const now = new Date()
 
   const handleDelete = async () => {
@@ -119,6 +126,47 @@ export function DemandasTable({ demandas, escalas, membros }: DemandasTableProps
 
   return (
     <>
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <Switch
+              id="show-concluidas"
+              checked={showConcluidas}
+              onCheckedChange={setShowConcluidas}
+            />
+            <Label htmlFor="show-concluidas" className="cursor-pointer text-sm font-normal">
+              Mostrar demandas concluídas
+            </Label>
+          </div>
+          {!showConcluidas && concluidasCount > 0 && (
+            <span className="text-sm text-muted-foreground">
+              ({concluidasCount} concluída{concluidasCount !== 1 ? "s" : ""} oculta{concluidasCount !== 1 ? "s" : ""})
+            </span>
+          )}
+        </div>
+      </div>
+
+      {filteredDemandas.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-12 text-center rounded-md border bg-muted/30">
+          <ClipboardList className="h-12 w-12 text-muted-foreground mb-4" />
+          <h3 className="text-lg font-semibold">
+            {concluidasCount > 0
+              ? "Nenhuma demanda em aberto"
+              : "Nenhuma demanda cadastrada"}
+          </h3>
+          <p className="text-sm text-muted-foreground mb-4">
+            {concluidasCount > 0
+              ? `Há ${concluidasCount} demanda${concluidasCount !== 1 ? "s" : ""} concluída${concluidasCount !== 1 ? "s" : ""}. Ative a opção acima para visualizar.`
+              : "Comece adicionando uma demanda ao sistema."}
+          </p>
+          {concluidasCount > 0 && (
+            <Button variant="outline" onClick={() => setShowConcluidas(true)}>
+              Mostrar demandas concluídas
+            </Button>
+          )}
+          {concluidasCount === 0 && <DemandaForm escalas={escalas} membros={membros} />}
+        </div>
+      ) : (
       <div className="rounded-md border">
         <Table>
           <TableHeader>
@@ -133,7 +181,7 @@ export function DemandasTable({ demandas, escalas, membros }: DemandasTableProps
             </TableRow>
           </TableHeader>
           <TableBody>
-            {demandas.map((demanda) => {
+            {filteredDemandas.map((demanda) => {
               const isOverdue = demanda.prazo && 
                 new Date(demanda.prazo) < now && 
                 demanda.status !== "concluida"
@@ -241,6 +289,7 @@ export function DemandasTable({ demandas, escalas, membros }: DemandasTableProps
           </TableBody>
         </Table>
       </div>
+      )}
 
       <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
         <AlertDialogContent>
