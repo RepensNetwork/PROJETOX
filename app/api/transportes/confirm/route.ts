@@ -58,6 +58,28 @@ export async function POST(req: Request) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 })
   }
 
+  const oldLeg = legs.find((leg) => leg.id === legId) || null
+  const newLeg = updatedLegs.find((leg) => leg.id === legId) || null
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  const { data: membro } = await supabase
+    .from("membros")
+    .select("id, email")
+    .eq("email", user?.email ?? "")
+    .single()
+
+  await supabase.from("audit_logs").insert({
+    entity: "demandas",
+    entity_id: demandaId,
+    action: action === "undo" ? "undo_leg" : "confirm_leg",
+    old_values: oldLeg,
+    new_values: newLeg,
+    actor_id: membro?.id ?? null,
+    actor_email: membro?.email ?? user?.email ?? null,
+  })
+
   await supabase.from("historico").insert({
     demanda_id: demandaId,
     acao: action === "undo" ? "Transporte reativado" : "Transporte concluído",

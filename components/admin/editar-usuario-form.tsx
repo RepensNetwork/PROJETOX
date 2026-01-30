@@ -25,8 +25,23 @@ export function EditarUsuarioForm({ membro }: EditarUsuarioFormProps) {
   const [email, setEmail] = useState(membro.email)
   const [ativo, setAtivo] = useState(membro.ativo)
   const [isAdmin, setIsAdmin] = useState(membro.is_admin || false)
+  const [allowedPages, setAllowedPages] = useState<string[]>(membro.allowed_pages || [])
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
   const router = useRouter()
+
+  const pageOptions = [
+    { key: "dashboard", label: "Dashboard" },
+    { key: "inbox", label: "Inbox" },
+    { key: "transportes", label: "Transportes" },
+    { key: "navios", label: "Navios" },
+    { key: "escalas", label: "Escalas" },
+    { key: "demandas", label: "Demandas" },
+    { key: "membros", label: "Colaboradores" },
+    { key: "intake", label: "Gravar Demanda" },
+    { key: "perfil", label: "Meu Perfil" },
+    { key: "sistema", label: "Sistema" },
+    { key: "logs", label: "Logs" },
+  ]
 
   const handleSave = async () => {
     setLoading(true)
@@ -42,6 +57,7 @@ export function EditarUsuarioForm({ membro }: EditarUsuarioFormProps) {
           email: email.trim(),
           ativo,
           is_admin: isAdmin,
+          allowed_pages: isAdmin ? null : allowedPages,
         })
         .eq("id", membro.id)
 
@@ -129,6 +145,34 @@ export function EditarUsuarioForm({ membro }: EditarUsuarioFormProps) {
             disabled={loading}
           />
         </div>
+
+        {!isAdmin && (
+          <div className="rounded-lg border p-4 space-y-3">
+            <p className="text-sm font-medium">Permissões de tela</p>
+            <div className="grid gap-2 md:grid-cols-2">
+              {pageOptions.map((option) => (
+                <label key={option.key} className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={allowedPages.includes(option.key)}
+                    onChange={(event) => {
+                      setAllowedPages((prev) =>
+                        event.target.checked
+                          ? [...prev, option.key]
+                          : prev.filter((item) => item !== option.key)
+                      )
+                    }}
+                    disabled={loading}
+                  />
+                  {option.label}
+                </label>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Usuários não-admin só enxergam as telas marcadas.
+            </p>
+          </div>
+        )}
 
         <div className="pt-4 border-t space-y-2">
           <p className="text-sm font-medium">Informações do Sistema</p>

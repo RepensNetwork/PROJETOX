@@ -18,6 +18,9 @@ CREATE TABLE IF NOT EXISTS public.membros (
   email TEXT UNIQUE NOT NULL,
   avatar_url TEXT,
   ativo BOOLEAN DEFAULT TRUE,
+  allowed_pages TEXT[],
+  session_ip TEXT,
+  last_login_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -128,6 +131,19 @@ CREATE TABLE IF NOT EXISTS public.historico (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 8. AUDIT LOGS (System audit trail)
+CREATE TABLE IF NOT EXISTS public.audit_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  entity TEXT NOT NULL,
+  entity_id TEXT NOT NULL,
+  action TEXT NOT NULL,
+  old_values JSONB,
+  new_values JSONB,
+  actor_id UUID REFERENCES public.membros(id) ON DELETE SET NULL,
+  actor_email TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_escalas_navio ON public.escalas(navio_id);
 CREATE INDEX IF NOT EXISTS idx_escalas_status ON public.escalas(status);
@@ -138,6 +154,8 @@ CREATE INDEX IF NOT EXISTS idx_demandas_responsavel ON public.demandas(responsav
 CREATE INDEX IF NOT EXISTS idx_demandas_prazo ON public.demandas(prazo);
 CREATE INDEX IF NOT EXISTS idx_demandas_pickup_at ON public.demandas(pickup_at);
 CREATE INDEX IF NOT EXISTS idx_comentarios_demanda ON public.comentarios(demanda_id);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_entity ON public.audit_logs(entity, entity_id);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON public.audit_logs(created_at DESC);
 
 -- Enable Row Level Security (permissive for MVP - all authenticated users can access)
 ALTER TABLE public.navios ENABLE ROW LEVEL SECURITY;
@@ -147,6 +165,7 @@ ALTER TABLE public.demandas ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.comentarios ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.anexos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.historico ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies (permissive for small team - all authenticated can CRUD)
 CREATE POLICY "Allow all for navios" ON public.navios FOR ALL USING (true) WITH CHECK (true);
@@ -156,3 +175,4 @@ CREATE POLICY "Allow all for demandas" ON public.demandas FOR ALL USING (true) W
 CREATE POLICY "Allow all for comentarios" ON public.comentarios FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all for anexos" ON public.anexos FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all for historico" ON public.historico FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all for audit_logs" ON public.audit_logs FOR ALL USING (true) WITH CHECK (true);

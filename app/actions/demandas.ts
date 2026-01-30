@@ -140,6 +140,25 @@ export async function createDemanda(data: {
 
     console.log("Demanda criada com sucesso:", demanda)
 
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    const { data: membro } = await supabase
+      .from("membros")
+      .select("id, email")
+      .eq("email", user?.email ?? "")
+      .single()
+
+    await supabase.from("audit_logs").insert({
+      entity: "demandas",
+      entity_id: demanda.id,
+      action: "create",
+      old_values: null,
+      new_values: demanda,
+      actor_id: membro?.id ?? null,
+      actor_email: membro?.email ?? user?.email ?? null,
+    })
+
     // Add to history
     try {
       await supabase.from("historico").insert({
@@ -196,6 +215,47 @@ export async function updateDemanda(
   if (error) {
     console.error("Error updating demanda:", error)
     return { success: false, error: error.message }
+  }
+
+  const trackFields: Array<keyof typeof data> = [
+    "titulo",
+    "descricao",
+    "pickup_at",
+    "pickup_local",
+    "dropoff_local",
+    "status",
+    "prioridade",
+    "responsavel_id",
+    "prazo",
+  ]
+  const oldValues: Record<string, unknown> = {}
+  const newValues: Record<string, unknown> = {}
+  for (const field of trackFields) {
+    if (data[field] !== undefined && data[field] !== (currentDemanda as any)?.[field]) {
+      oldValues[field] = (currentDemanda as any)?.[field] ?? null
+      newValues[field] = data[field] ?? null
+    }
+  }
+
+  if (Object.keys(newValues).length > 0) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    const { data: membro } = await supabase
+      .from("membros")
+      .select("id, email")
+      .eq("email", user?.email ?? "")
+      .single()
+
+    await supabase.from("audit_logs").insert({
+      entity: "demandas",
+      entity_id: id,
+      action: "update",
+      old_values: oldValues,
+      new_values: newValues,
+      actor_id: membro?.id ?? null,
+      actor_email: membro?.email ?? user?.email ?? null,
+    })
   }
 
   // Add to history

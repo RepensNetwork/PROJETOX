@@ -58,6 +58,9 @@ export interface Membro {
   avatar_url?: string | null
   ativo: boolean
   is_admin?: boolean
+  allowed_pages?: string[] | null
+  session_ip?: string | null
+  last_login_at?: string | null
   created_at: string
 }
 
@@ -214,6 +217,18 @@ export interface EmailRegistro {
   attachments?: any
   created_at: string
   navio?: Navio
+}
+
+export interface AuditLog {
+  id: string
+  entity: string
+  entity_id: string
+  action: string
+  old_values?: any
+  new_values?: any
+  actor_id?: string | null
+  actor_email?: string | null
+  created_at: string
 }
 
 export interface EscalaComDemandas extends Escala {

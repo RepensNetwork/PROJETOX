@@ -40,6 +40,9 @@ export async function POST(req: Request) {
     } satisfies TransporteLeg
   })
 
+  const oldLeg = legs.find((leg) => leg.id === legId) || null
+  const newLeg = updatedLegs.find((leg) => leg.id === legId) || null
+
   const primaryLeg = updatedLegs[0]
   const updateData: Record<string, unknown> = {
     transporte_legs: updatedLegs,
@@ -56,6 +59,25 @@ export async function POST(req: Request) {
   if (error) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 })
   }
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  const { data: membro } = await supabase
+    .from("membros")
+    .select("id, email")
+    .eq("email", user?.email ?? "")
+    .single()
+
+  await supabase.from("audit_logs").insert({
+    entity: "demandas",
+    entity_id: demandaId,
+    action: "update_leg",
+    old_values: oldLeg,
+    new_values: newLeg,
+    actor_id: membro?.id ?? null,
+    actor_email: membro?.email ?? user?.email ?? null,
+  })
 
   revalidatePath("/motorista")
 

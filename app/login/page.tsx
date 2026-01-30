@@ -23,6 +23,12 @@ function LoginForm() {
     if (errorParam === "auth_failed") {
       setError("Falha na autenticação. Tente novamente.")
     }
+    if (errorParam === "member_missing") {
+      setError("Usuário não autorizado. Peça ao admin para cadastrar seu email.")
+    }
+    if (errorParam === "inactive") {
+      setError("Usuário desativado. Fale com o administrador.")
+    }
   }, [searchParams])
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -109,7 +115,11 @@ function LoginForm() {
               />
             </div>
 
-            <Button type="submit" className="w-full" disabled={loading}>
+            <Button
+              type="submit"
+              className="w-full bg-green-600 hover:bg-green-700"
+              disabled={loading}
+            >
               {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {loading ? "Entrando..." : "Entrar"}
             </Button>

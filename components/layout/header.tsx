@@ -21,14 +21,15 @@ import { createClient } from "@/lib/supabase/client"
 import type { Membro } from "@/lib/types/database"
 
 const navigation = [
-  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { name: "Gravar Demanda", href: "/intake", icon: Mic },
-  { name: "Inbox", href: "/emails", icon: Mail },
-  { name: "Transportes", href: "/motorista", icon: Car },
-  { name: "Navios", href: "/navios", icon: Ship },
-  { name: "Escalas", href: "/escalas", icon: Calendar },
-  { name: "Demandas", href: "/demandas", icon: ClipboardList },
-  { name: "Colaboradores", href: "/membros", icon: Users },
+  { key: "dashboard", name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { key: "intake", name: "Gravar Demanda", href: "/intake", icon: Mic },
+  { key: "inbox", name: "Inbox", href: "/emails", icon: Mail },
+  { key: "transportes", name: "Transportes", href: "/motorista", icon: Car },
+  { key: "navios", name: "Navios", href: "/navios", icon: Ship },
+  { key: "escalas", name: "Escalas", href: "/escalas", icon: Calendar },
+  { key: "demandas", name: "Demandas", href: "/demandas", icon: ClipboardList },
+  { key: "membros", name: "Colaboradores", href: "/membros", icon: Users },
+  { key: "logs", name: "Logs", href: "/logs", icon: Shield },
 ]
 
 export function Header() {
@@ -134,7 +135,14 @@ export function Header() {
 
         {/* Desktop Navigation */}
         <nav className="hidden md:flex items-center gap-1">
-          {navigation.map((item) => {
+          {navigation
+            .filter((item) => {
+              if (!membro) return false
+              if (membro.is_admin) return true
+              const allowed = Array.isArray(membro.allowed_pages) ? membro.allowed_pages : []
+              return allowed.includes(item.key)
+            })
+            .map((item) => {
             const isActive = pathname === item.href || 
               (item.href !== "/dashboard" && pathname.startsWith(item.href))
             const Icon = item.icon
@@ -215,7 +223,14 @@ export function Header() {
                 <span className="font-semibold text-lg">Asa Brokers</span>
               </div>
               <nav className="flex flex-col gap-2">
-                {navigation.map((item) => {
+                {navigation
+                  .filter((item) => {
+                    if (!membro) return false
+                    if (membro.is_admin) return true
+                    const allowed = Array.isArray(membro.allowed_pages) ? membro.allowed_pages : []
+                    return allowed.includes(item.key)
+                  })
+                  .map((item) => {
                   const isActive = pathname === item.href || 
                     (item.href !== "/dashboard" && pathname.startsWith(item.href))
                   const Icon = item.icon
