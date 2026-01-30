@@ -481,6 +481,8 @@ export async function updateDemandaReserva(
   const supabase = await createClient()
 
   const payload: Record<string, unknown> = { updated_at: new Date().toISOString() }
+  if (input.reserva_hotel_nome !== undefined) payload.reserva_hotel_nome = input.reserva_hotel_nome || null
+  if (input.reserva_hotel_endereco !== undefined) payload.reserva_hotel_endereco = input.reserva_hotel_endereco || null
   if (input.reserva_checkin !== undefined) payload.reserva_checkin = input.reserva_checkin || null
   if (input.reserva_checkout !== undefined) payload.reserva_checkout = input.reserva_checkout || null
   if (input.reserva_valor !== undefined) payload.reserva_valor = input.reserva_valor ?? null

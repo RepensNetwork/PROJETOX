@@ -2,8 +2,16 @@ import { Header } from "@/components/layout/header"
 import { getReservasHotel } from "@/app/actions/reservas"
 import { ReservasClient } from "./reservas-client"
 
-export default async function ReservasPage() {
-  const reservas = await getReservasHotel()
+interface ReservasPageProps {
+  searchParams: Promise<{ dataInicio?: string; dataFim?: string }>
+}
+
+export default async function ReservasPage({ searchParams }: ReservasPageProps) {
+  const params = await searchParams
+  const reservas = await getReservasHotel({
+    dataInicio: params.dataInicio,
+    dataFim: params.dataFim,
+  })
 
   return (
     <div className="min-h-screen bg-background">
@@ -16,7 +24,10 @@ export default async function ReservasPage() {
           </p>
         </div>
 
-        <ReservasClient reservas={reservas} />
+        <ReservasClient
+          reservas={reservas}
+          filtroInicial={{ dataInicio: params.dataInicio, dataFim: params.dataFim }}
+        />
       </main>
     </div>
   )

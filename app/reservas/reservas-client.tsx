@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale/pt-BR"
 import { Badge } from "@/components/ui/badge"
@@ -14,15 +15,28 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Hotel, Loader2, ExternalLink, Coffee, UtensilsCrossed, CheckCheck } from "lucide-react"
+import { Hotel, Loader2, ExternalLink, Coffee, UtensilsCrossed, CheckCheck, Trash2, FileDown, Printer, Filter } from "lucide-react"
 import type { ReservaItem, UpdateReservaHotelInput } from "@/lib/reservas"
+import type { FiltroReservas } from "@/app/actions/reservas"
 import { getTripulanteNome } from "@/lib/reservas"
-import { updateReservaHotel } from "@/app/actions/reservas"
+import { updateDemandaReserva, clearDemandaReserva } from "@/app/actions/demandas"
+import { gerarRelatorioReservasPDF } from "@/lib/relatorio-reservas-pdf"
 
 interface ReservasClientProps {
   reservas: ReservaItem[]
+  filtroInicial?: FiltroReservas
 }
 
 function formatDate(value: string | null | undefined): string {
@@ -37,10 +51,16 @@ function formatCurrency(value: number | null | undefined): string {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(value))
 }
 
-export function ReservasClient({ reservas }: ReservasClientProps) {
+export function ReservasClient({ reservas, filtroInicial }: ReservasClientProps) {
+  const router = useRouter()
   const [editing, setEditing] = useState<ReservaItem | null>(null)
+  const [removing, setRemoving] = useState<ReservaItem | null>(null)
   const [saving, setSaving] = useState(false)
+  const [removeError, setRemoveError] = useState<string | null>(null)
+  const [gerandoPdf, setGerandoPdf] = useState(false)
   const [form, setForm] = useState<UpdateReservaHotelInput>({})
+  const [dataInicio, setDataInicio] = useState(filtroInicial?.dataInicio ?? "")
+  const [dataFim, setDataFim] = useState(filtroInicial?.dataFim ?? "")
 
   const openEdit = (r: ReservaItem) => {
     setEditing(r)
@@ -59,11 +79,86 @@ export function ReservasClient({ reservas }: ReservasClientProps) {
   const handleSave = async () => {
     if (!editing) return
     setSaving(true)
-    const result = await updateReservaHotel(editing.id, form)
+    const result = await updateDemandaReserva(editing.id, form)
     setSaving(false)
     if (result.success) {
       setEditing(null)
-      window.location.reload()
+      router.refresh()
+    }
+  }
+
+  const handleRemove = async () => {
+    if (!removing) return
+    setSaving(true)
+    setRemoveError(null)
+    const result = await clearDemandaReserva(removing.id)
+    setSaving(false)
+    if (result.success) {
+      setRemoving(null)
+      router.refresh()
+    } else {
+      setRemoveError(result.error ?? "Não foi possível remover a reserva.")
+    }
+  }
+
+  const aplicarFiltro = () => {
+    const params = new URLSearchParams()
+    if (dataInicio) params.set("dataInicio", dataInicio)
+    if (dataFim) params.set("dataFim", dataFim)
+    router.push(`/reservas${params.toString() ? `?${params.toString()}` : ""}`)
+  }
+
+  const limparFiltro = () => {
+    setDataInicio("")
+    setDataFim("")
+    router.push("/reservas")
+  }
+
+  const exportarCSV = () => {
+    const headers = [
+      "Tripulante",
+      "Hotel",
+      "Endereço",
+      "Navio/Escala",
+      "Check-in",
+      "Check-out",
+      "Valor (R$)",
+      "Café",
+      "Almoço",
+      "Confirmado",
+    ]
+    const rows = reservas.map((r) => [
+      getTripulanteNome(r),
+      r.reserva_hotel_nome ?? "",
+      r.reserva_hotel_endereco ?? "",
+      `${r.escala?.navio?.nome ?? ""} / ${r.escala?.porto ?? ""}`,
+      formatDate(r.reserva_checkin),
+      formatDate(r.reserva_checkout),
+      r.reserva_valor != null ? String(r.reserva_valor) : "",
+      r.reserva_cafe_incluso ? "Sim" : "Não",
+      r.reserva_almoco_incluso ? "Sim" : "Não",
+      r.reserva_confirmado ? "Sim" : "Não",
+    ])
+    const csv = [headers.join(";"), ...rows.map((row) => row.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(";"))].join("\n")
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `reservas-hotel-${format(new Date(), "yyyy-MM-dd")}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const gerarPdfRelatorio = async () => {
+    setGerandoPdf(true)
+    try {
+      await gerarRelatorioReservasPDF({
+        reservas,
+        dataInicio: filtroInicial?.dataInicio,
+        dataFim: filtroInicial?.dataFim,
+      })
+    } finally {
+      setGerandoPdf(false)
     }
   }
 
@@ -71,18 +166,79 @@ export function ReservasClient({ reservas }: ReservasClientProps) {
     return (
       <div className="rounded-lg border bg-card p-12 text-center text-muted-foreground">
         <Hotel className="mx-auto h-12 w-12 opacity-50 mb-4" />
-        <p>Nenhum tripulante com necessidade de hotel no momento.</p>
-        <p className="text-sm mt-2">Crie demandas do tipo &quot;Reserva hotel&quot; e vincule ao tripulante (demanda principal).</p>
-        <Button asChild variant="outline" className="mt-4">
-          <Link href="/demandas">Ver demandas</Link>
-        </Button>
+        {filtroInicial?.dataInicio || filtroInicial?.dataFim ? (
+          <>
+            <p>Nenhuma reserva encontrada no período selecionado.</p>
+            <Button variant="outline" className="mt-4" onClick={limparFiltro}>
+              Limpar filtro
+            </Button>
+          </>
+        ) : (
+          <>
+            <p>Nenhum tripulante com necessidade de hotel no momento.</p>
+            <p className="text-sm mt-2">Crie demandas do tipo &quot;Reserva hotel&quot; ou vincule reserva às demandas de tripulante.</p>
+            <Button asChild variant="outline" className="mt-4">
+              <Link href="/demandas">Ver demandas</Link>
+            </Button>
+          </>
+        )}
       </div>
     )
   }
 
   return (
     <>
-      <div className="rounded-lg border bg-card overflow-hidden">
+      <div className="hidden print:block text-lg font-semibold mb-4">
+        Relatório de Reservas (Hotel) — {format(new Date(), "dd/MM/yyyy", { locale: ptBR })}
+      </div>
+      <div className="rounded-lg border bg-card p-4 space-y-4 print:border-0 print:p-0">
+        <div className="flex flex-wrap items-end gap-3 print:hidden">
+          <div className="flex items-center gap-2">
+            <Label htmlFor="data-inicio" className="text-muted-foreground text-sm">Data início</Label>
+            <Input
+              id="data-inicio"
+              type="date"
+              value={dataInicio}
+              onChange={(e) => setDataInicio(e.target.value)}
+              className="w-40"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <Label htmlFor="data-fim" className="text-muted-foreground text-sm">Data fim</Label>
+            <Input
+              id="data-fim"
+              type="date"
+              value={dataFim}
+              onChange={(e) => setDataFim(e.target.value)}
+              className="w-40"
+            />
+          </div>
+          <Button variant="outline" size="sm" onClick={aplicarFiltro}>
+            <Filter className="h-4 w-4 mr-2" />
+            Filtrar
+          </Button>
+          {(filtroInicial?.dataInicio || filtroInicial?.dataFim) && (
+            <Button variant="ghost" size="sm" onClick={limparFiltro}>
+              Limpar filtro
+            </Button>
+          )}
+          <div className="flex-1" />
+          <Button variant="outline" size="sm" onClick={exportarCSV}>
+            <FileDown className="h-4 w-4 mr-2" />
+            Exportar CSV
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={gerarPdfRelatorio}
+            disabled={gerandoPdf}
+            title={`Gerar PDF com as ${reservas.length} reserva(s) exibidas nesta página`}
+          >
+            {gerandoPdf ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Printer className="h-4 w-4 mr-2" />}
+            Gerar PDF ({reservas.length})
+          </Button>
+        </div>
+
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -96,7 +252,7 @@ export function ReservasClient({ reservas }: ReservasClientProps) {
                 <th className="text-center p-3 font-medium">Café</th>
                 <th className="text-center p-3 font-medium">Almoço</th>
                 <th className="text-center p-3 font-medium">Confirmado</th>
-                <th className="w-10 p-3" />
+                <th className="w-10 p-3 print:hidden" />
               </tr>
             </thead>
             <tbody>
@@ -147,10 +303,22 @@ export function ReservasClient({ reservas }: ReservasClientProps) {
                       <Badge variant="secondary">Pendente</Badge>
                     )}
                   </td>
-                  <td className="p-3">
+                  <td className="p-3 print:hidden">
                     <div className="flex items-center gap-1">
                       <Button variant="ghost" size="sm" onClick={() => openEdit(r)}>
                         Editar
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-destructive hover:text-destructive"
+                        onClick={() => {
+                          setRemoveError(null)
+                          setRemoving(r)
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4 mr-1" />
+                        Excluir
                       </Button>
                       <Button variant="ghost" size="icon" asChild>
                         <Link href={`/demandas/${r.id}`} aria-label="Abrir demanda">
@@ -165,6 +333,35 @@ export function ReservasClient({ reservas }: ReservasClientProps) {
           </table>
         </div>
       </div>
+
+      <AlertDialog open={!!removing} onOpenChange={(open) => !open && !saving && (setRemoving(null), setRemoveError(null))}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover reserva?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Os dados de reserva de hotel serão removidos desta demanda
+              {removing ? ` (${getTripulanteNome(removing)})` : ""}. A demanda continuará existindo; apenas a reserva será desvinculada.
+            </AlertDialogDescription>
+            {removeError && (
+              <p className="text-destructive text-sm font-medium">{removeError}</p>
+            )}
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={saving}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={async (e) => {
+                e.preventDefault()
+                await handleRemove()
+              }}
+              disabled={saving}
+            >
+              {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Remover reserva
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Dialog open={!!editing} onOpenChange={(open) => !open && setEditing(null)}>
         <DialogContent className="sm:max-w-md">
