@@ -29,6 +29,12 @@ import { DateTimePickerPopover } from "@/components/ui/datetime-picker-popover"
 import { createDemanda, updateDemanda } from "@/app/actions/demandas"
 import type { Demanda, Escala, Navio, Membro } from "@/lib/types/database"
 
+const TIPOS_TRIPULANTE: Demanda["tipo"][] = [
+  "embarque_passageiros",
+  "desembarque_passageiros",
+  "transporte_terrestre",
+]
+
 interface DemandaFormProps {
   demanda?: Demanda
   escalaId?: string
@@ -36,6 +42,11 @@ interface DemandaFormProps {
   membros: Membro[]
   trigger?: React.ReactNode
   onSuccess?: () => void
+  /** Abre o formulário com tipo já selecionado (ex.: embarque/desembarque). */
+  initialTipo?: Demanda["tipo"]
+  /** Modo controlado: controla abertura do diálogo pelo pai. */
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }
 
 const statusOptions = [
@@ -94,16 +105,22 @@ const categoriaOptions = [
   { value: "processos_internos", label: "Processos Internos" },
 ]
 
-export function DemandaForm({ 
-  demanda, 
-  escalaId, 
-  escalas, 
-  membros, 
-  trigger, 
-  onSuccess 
+export function DemandaForm({
+  demanda,
+  escalaId,
+  escalas,
+  membros,
+  trigger,
+  onSuccess,
+  initialTipo,
+  open: openProp,
+  onOpenChange: onOpenChangeProp,
 }: DemandaFormProps) {
   const router = useRouter()
-  const [open, setOpen] = useState(false)
+  const [internalOpen, setInternalOpen] = useState(false)
+  const isControlled = openProp !== undefined
+  const open = isControlled ? openProp : internalOpen
+  const setOpen = isControlled ? (onOpenChangeProp ?? (() => {})) : setInternalOpen
   const [loading, setLoading] = useState(false)
   const getIsoOrEmpty = (value: string | null | undefined): string => {
     if (!value) return ""
@@ -137,6 +154,20 @@ export function DemandaForm({
       setFormData(prev => ({ ...prev, escala_id: escalaId }))
     }
   }, [escalaId, demanda])
+
+  // Ao abrir o diálogo (nova demanda), preencher tipo/categoria conforme initialTipo
+  React.useEffect(() => {
+    if (!open || demanda) return
+    if (initialTipo) {
+      const categoria =
+        initialTipo === "embarque_passageiros" || initialTipo === "desembarque_passageiros"
+          ? "passageiros"
+          : "logistica"
+      setFormData((prev) => ({ ...prev, tipo: initialTipo, categoria }))
+    } else {
+      setFormData((prev) => ({ ...prev, tipo: "outro", categoria: "processos_internos" }))
+    }
+  }, [open, demanda, initialTipo])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -258,16 +289,20 @@ export function DemandaForm({
     }
   }
 
+  const showTransporte = TIPOS_TRIPULANTE.includes(formData.tipo as Demanda["tipo"])
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        {trigger || (
-          <Button>
-            <Plus className="h-4 w-4 mr-2" />
-            Nova Demanda
-          </Button>
-        )}
-      </DialogTrigger>
+      {!isControlled && (
+        <DialogTrigger asChild>
+          {trigger || (
+            <Button>
+              <Plus className="h-4 w-4 mr-2" />
+              Nova Demanda
+            </Button>
+          )}
+        </DialogTrigger>
+      )}
       <DialogContent className="sm:max-w-[500px]">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
@@ -372,38 +407,42 @@ export function DemandaForm({
               />
             </div>
 
-            <div className="rounded-md border bg-muted/30 p-3 space-y-3">
-              <p className="text-xs font-medium text-muted-foreground">Transporte (opcional)</p>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="pickup_at">Horário de busca</Label>
-                  <DateTimePickerPopover
-                    id="pickup_at"
-                    value={formData.pickup_at || undefined}
-                    placeholder="Selecionar data e hora"
-                    onChange={(iso) => setFormData({ ...formData, pickup_at: iso ?? "" })}
-                  />
+            {showTransporte && (
+              <div className="rounded-md border bg-muted/30 p-3 space-y-3">
+                <p className="text-xs font-medium text-muted-foreground">
+                  Transporte (opcional) — motorista e hotel podem ser definidos na página da demanda
+                </p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="pickup_at">Horário de busca</Label>
+                    <DateTimePickerPopover
+                      id="pickup_at"
+                      value={formData.pickup_at || undefined}
+                      placeholder="Selecionar data e hora"
+                      onChange={(iso) => setFormData({ ...formData, pickup_at: iso ?? "" })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="pickup_local">Local de busca</Label>
+                    <Input
+                      id="pickup_local"
+                      value={formData.pickup_local}
+                      onChange={(e) => setFormData({ ...formData, pickup_local: e.target.value })}
+                      placeholder="Origem / local de pickup"
+                    />
+                  </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="pickup_local">Local de busca</Label>
+                  <Label htmlFor="dropoff_local">Destino</Label>
                   <Input
-                    id="pickup_local"
-                    value={formData.pickup_local}
-                    onChange={(e) => setFormData({ ...formData, pickup_local: e.target.value })}
-                    placeholder="Origem / local de pickup"
+                    id="dropoff_local"
+                    value={formData.dropoff_local}
+                    onChange={(e) => setFormData({ ...formData, dropoff_local: e.target.value })}
+                    placeholder="Destino / local de entrega"
                   />
                 </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="dropoff_local">Destino</Label>
-                <Input
-                  id="dropoff_local"
-                  value={formData.dropoff_local}
-                  onChange={(e) => setFormData({ ...formData, dropoff_local: e.target.value })}
-                  placeholder="Destino / local de entrega"
-                />
-              </div>
-            </div>
+            )}
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">

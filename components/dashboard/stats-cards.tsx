@@ -20,6 +20,8 @@ export function StatsCards({ stats, escalas, allDemandas, navios }: StatsCardsPr
   const [alertasOpen, setAlertasOpen] = useState(false)
   const [concluidasOpen, setConcluidasOpen] = useState(false)
 
+  const demandasAtivas = allDemandas.filter(d => d.status !== "concluida")
+
   const alertasDemandas = allDemandas.filter(d => {
     const now = new Date()
     const isAtrasada = d.prazo && new Date(d.prazo) < now && d.status !== "concluida"
@@ -168,11 +170,11 @@ export function StatsCards({ stats, escalas, allDemandas, navios }: StatsCardsPr
       />
 
       <DemandasPopup 
-        demandas={allDemandas} 
+        demandas={demandasAtivas} 
         open={demandasOpen} 
         onOpenChange={setDemandasOpen}
-        title="Todas as Demandas"
-        description="Lista completa de demandas cadastradas"
+        title="Todas as Demandas (ativas)"
+        description="Demandas ativas — pendentes, em andamento ou aguardando terceiro (não concluídas)"
       />
 
       <DemandasPopup 

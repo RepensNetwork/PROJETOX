@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import {
   Dialog,
   DialogContent,
@@ -9,8 +10,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import Link from "next/link"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale/pt-BR"
@@ -18,14 +24,16 @@ import {
   Ship, 
   ClipboardList, 
   AlertTriangle, 
-  CheckCircle,
   MapPin,
   Calendar,
   Clock,
   User,
-  ExternalLink
+  ExternalLink,
+  Loader2,
+  ChevronDown
 } from "lucide-react"
 import type { Escala, Demanda, Navio } from "@/lib/types/database"
+import { updateDemanda } from "@/app/actions/demandas"
 
 interface EscalasPopupProps {
   escalas: (Escala & { navio: Navio })[]
@@ -113,7 +121,18 @@ interface DemandasPopupProps {
   description: string
 }
 
+const statusOptions: { value: Demanda["status"]; label: string }[] = [
+  { value: "pendente", label: "Pendente" },
+  { value: "em_andamento", label: "Em Andamento" },
+  { value: "concluida", label: "Concluída" },
+  { value: "aguardando_terceiro", label: "Aguardando Terceiro" },
+  { value: "cancelada", label: "Cancelada" },
+]
+
 export function DemandasPopup({ demandas, open, onOpenChange, title, description }: DemandasPopupProps) {
+  const router = useRouter()
+  const [updatingId, setUpdatingId] = useState<string | null>(null)
+
   const statusColors: Record<Demanda["status"], string> = {
     pendente: "bg-warning/10 text-warning-foreground border-warning/30",
     em_andamento: "bg-primary/10 text-primary border-primary/30",
@@ -144,6 +163,16 @@ export function DemandasPopup({ demandas, open, onOpenChange, title, description
     urgente: "Urgente",
   }
 
+  const handleStatusChange = async (demandaId: string, newStatus: Demanda["status"]) => {
+    setUpdatingId(demandaId)
+    try {
+      await updateDemanda(demandaId, { status: newStatus })
+      router.refresh()
+    } finally {
+      setUpdatingId(null)
+    }
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[700px] flex flex-col max-h-[90vh]">
@@ -153,7 +182,7 @@ export function DemandasPopup({ demandas, open, onOpenChange, title, description
             {title}
           </DialogTitle>
           <DialogDescription>
-            {description} ({demandas.length})
+            {description} ({demandas.length}). Clique no status para alterar.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3 min-h-0 flex-1 overflow-y-auto -mx-1 px-1">
@@ -166,53 +195,88 @@ export function DemandasPopup({ demandas, open, onOpenChange, title, description
               const isOverdue = demanda.prazo && 
                 new Date(demanda.prazo) < new Date() && 
                 demanda.status !== "concluida"
+              const isUpdating = updatingId === demanda.id
 
               return (
-                <Link
+                <div
                   key={demanda.id}
-                  href={`/demandas/${demanda.id}`}
-                  className="block"
-                >
-                  <div className={`flex items-start justify-between p-4 rounded-lg border transition-colors ${
+                  className={`flex items-start justify-between p-4 rounded-lg border transition-colors ${
                     isOverdue ? "bg-destructive/5 border-destructive/30" : "bg-muted/30 hover:bg-muted/50"
-                  }`}>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        {isOverdue && <AlertTriangle className="h-4 w-4 text-destructive" />}
-                        <span className="font-semibold">{demanda.titulo}</span>
+                  }`}
+                >
+                  <Link href={`/demandas/${demanda.id}`} className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-2">
+                      {isOverdue && <AlertTriangle className="h-4 w-4 text-destructive shrink-0" />}
+                      <span className="font-semibold hover:underline">{demanda.titulo}</span>
+                    </div>
+                    <div className="text-sm text-muted-foreground space-y-1">
+                      <div className="flex items-center gap-2">
+                        <Ship className="h-3.5 w-3.5 shrink-0" />
+                        {demanda.escala.navio.nome} - {demanda.escala.porto}
                       </div>
-                      <div className="text-sm text-muted-foreground space-y-1">
-                        <div className="flex items-center gap-2">
-                          <Ship className="h-3.5 w-3.5" />
-                          {demanda.escala.navio.nome} - {demanda.escala.porto}
+                      {demanda.prazo && (
+                        <div className={`flex items-center gap-2 ${
+                          isOverdue ? "text-destructive font-medium" : ""
+                        }`}>
+                          <Clock className="h-3.5 w-3.5 shrink-0" />
+                          Prazo: {format(new Date(demanda.prazo), "dd/MM/yyyy HH:mm", { locale: ptBR })}
+                          {isOverdue && " (Atrasado)"}
                         </div>
-                        {demanda.prazo && (
-                          <div className={`flex items-center gap-2 ${
-                            isOverdue ? "text-destructive font-medium" : ""
-                          }`}>
-                            <Clock className="h-3.5 w-3.5" />
-                            Prazo: {format(new Date(demanda.prazo), "dd/MM/yyyy HH:mm", { locale: ptBR })}
-                            {isOverdue && " (Atrasado)"}
-                          </div>
-                        )}
-                        {demanda.responsavel && (
-                          <div className="flex items-center gap-2">
-                            <User className="h-3.5 w-3.5" />
-                            {demanda.responsavel.nome}
-                          </div>
-                        )}
-                      </div>
+                      )}
+                      {demanda.responsavel && (
+                        <div className="flex items-center gap-2">
+                          <User className="h-3.5 w-3.5 shrink-0" />
+                          {demanda.responsavel.nome}
+                        </div>
+                      )}
                     </div>
-                    <div className="flex flex-col gap-2 items-end">
-                      <Badge className={statusColors[demanda.status]}>
-                        {statusLabels[demanda.status]}
-                      </Badge>
-                      <Badge variant="outline" className={prioridadeColors[demanda.prioridade]}>
-                        {prioridadeLabels[demanda.prioridade]}
-                      </Badge>
-                    </div>
+                  </Link>
+                  <div
+                    className="flex flex-col gap-2 items-end shrink-0"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className={`h-auto py-1 px-2 font-normal ${statusColors[demanda.status]} hover:opacity-90`}
+                          disabled={isUpdating}
+                        >
+                          {isUpdating ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <>
+                              {statusLabels[demanda.status]}
+                              <ChevronDown className="h-3.5 w-3.5 ml-1 opacity-70" />
+                            </>
+                          )}
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        {statusOptions.map((opt) => (
+                          <DropdownMenuItem
+                            key={opt.value}
+                            onClick={() => handleStatusChange(demanda.id, opt.value)}
+                            disabled={demanda.status === opt.value}
+                          >
+                            {opt.label}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                    <Badge variant="outline" className={prioridadeColors[demanda.prioridade]}>
+                      {prioridadeLabels[demanda.prioridade]}
+                    </Badge>
+                    <Link
+                      href={`/demandas/${demanda.id}`}
+                      className="text-muted-foreground hover:text-foreground"
+                      aria-label="Abrir demanda"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                    </Link>
                   </div>
-                </Link>
+                </div>
               )
             })
           )}

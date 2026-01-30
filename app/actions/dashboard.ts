@@ -81,7 +81,8 @@ export async function getUpcomingEscalas(): Promise<(Escala & { navio: Navio; de
     return []
   }
 
-  // Incluir escalas que chegam hoje/futuro OU que saem hoje/futuro (inclui em andamento)
+  // Incluir escalas que chegam hoje/futuro OU que saem hoje/futuro (inclui em andamento:
+  // chegada no passado + saída hoje/futuro = escala em curso)
   const now = new Date()
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   startOfToday.setHours(0, 0, 0, 0)
