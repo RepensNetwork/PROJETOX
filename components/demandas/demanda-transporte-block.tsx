@@ -118,6 +118,11 @@ export function DemandaTransporteBlock({ demanda }: DemandaTransporteBlockProps)
                       {leg.status === "concluido" ? "Concluído" : "Pendente"}
                     </Badge>
                   )}
+                  {leg.duracao_minutos != null && (
+                    <span className="text-muted-foreground text-xs">
+                      Tempo: {leg.duracao_minutos} min
+                    </span>
+                  )}
                   <Button
                     variant="ghost"
                     size="icon"

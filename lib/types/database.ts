@@ -94,6 +94,8 @@ export interface Demanda {
   transporte_concluido_em?: string | null
   transporte_legs?: any
   /** Reserva hotel */
+  reserva_hotel_nome?: string | null
+  reserva_hotel_endereco?: string | null
   reserva_checkin?: string | null
   reserva_checkout?: string | null
   reserva_valor?: number | null

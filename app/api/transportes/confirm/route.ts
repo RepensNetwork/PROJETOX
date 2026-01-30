@@ -11,6 +11,7 @@ export async function POST(req: Request) {
   const grupo = body?.grupo as string | undefined
   const status = body?.status as string | undefined
   const action = body?.action as string | undefined
+  const duracao_minutos = body?.duracao_minutos as number | undefined
 
   if (!demandaId || !legId) {
     return NextResponse.json({ success: false, error: "demandaId e legId obrigatórios" }, { status: 400 })
@@ -40,6 +41,8 @@ export async function POST(req: Request) {
       concluido_em: action === "undo" ? null : new Date().toISOString(),
     }
     if (grupo !== undefined) next.grupo = grupo || null
+    if (action === "undo") next.duracao_minutos = null
+    else if (duracao_minutos !== undefined) next.duracao_minutos = duracao_minutos == null || Number.isNaN(Number(duracao_minutos)) ? null : Number(duracao_minutos)
     return next
   })
 

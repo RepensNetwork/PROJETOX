@@ -68,6 +68,7 @@ export function MotoristaClient({ transportes, dataFiltro }: MotoristaClientProp
     legId: string
     tripulanteNome: string
     numeroViagem: string
+    tempoTrajetoMin: string
   } | null>(null)
   const [pdfLoading, setPdfLoading] = useState(false)
 
@@ -185,6 +186,7 @@ export function MotoristaClient({ transportes, dataFiltro }: MotoristaClientProp
       legId,
       tripulanteNome,
       numeroViagem: "",
+      tempoTrajetoMin: "",
     })
   }
 
@@ -198,6 +200,8 @@ export function MotoristaClient({ transportes, dataFiltro }: MotoristaClientProp
     setMessage(null)
     setLoadingId(confirmDialog.legId)
     try {
+      const tempoMin = confirmDialog.tempoTrajetoMin.trim()
+      const duracao_minutos = tempoMin ? (Number(tempoMin) || null) : undefined
       const response = await fetch("/api/transportes/confirm", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -206,6 +210,7 @@ export function MotoristaClient({ transportes, dataFiltro }: MotoristaClientProp
           legId: confirmDialog.legId,
           grupo: numeroViagem,
           status: "concluido",
+          ...(duracao_minutos != null && { duracao_minutos }),
         }),
       })
       const data = await response.json().catch(() => ({}))
@@ -453,6 +458,9 @@ export function MotoristaClient({ transportes, dataFiltro }: MotoristaClientProp
                               {status === "concluido" && leg.grupo?.trim() && (
                                 <p className="text-xs text-muted-foreground mt-0.5">Nº viagem: {leg.grupo.trim()}</p>
                               )}
+                              {status === "concluido" && leg.duracao_minutos != null && (
+                                <p className="text-xs text-muted-foreground mt-0.5">Tempo do trajeto: {leg.duracao_minutos} min</p>
+                              )}
                               <div className="mt-1.5 flex items-center gap-2">
                                 <Badge variant="outline" className={`text-xs ${statusClasses[status]}`}>
                                   {statusLabels[status]}
@@ -620,6 +628,24 @@ export function MotoristaClient({ transportes, dataFiltro }: MotoristaClientProp
                   }
                   autoFocus
                 />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="tempo-trajeto">
+                  Tempo do trajeto (min)
+                </Label>
+                <Input
+                  id="tempo-trajeto"
+                  type="number"
+                  min={1}
+                  placeholder="Ex.: 45 — para identificar horas paradas"
+                  value={confirmDialog.tempoTrajetoMin}
+                  onChange={(e) =>
+                    setConfirmDialog((p) => p ? { ...p, tempoTrajetoMin: e.target.value } : null)
+                  }
+                />
+                <p className="text-xs text-muted-foreground">
+                  Quanto tempo levou todo o trajeto? Opcional; ajuda a identificar horas paradas.
+                </p>
               </div>
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setConfirmDialog(null)}>

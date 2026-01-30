@@ -12,6 +12,8 @@ export function getTripulanteNome(reserva: ReservaItem): string {
 }
 
 export type UpdateReservaHotelInput = {
+  reserva_hotel_nome?: string | null
+  reserva_hotel_endereco?: string | null
   reserva_checkin?: string | null
   reserva_checkout?: string | null
   reserva_valor?: number | null

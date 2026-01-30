@@ -38,7 +38,7 @@ interface DemandaReservaBlockProps {
 }
 
 const hasReserva = (d: Demanda) =>
-  d.reserva_checkin ?? d.reserva_checkout ?? d.reserva_valor != null
+  d.reserva_hotel_nome ?? d.reserva_hotel_endereco ?? d.reserva_checkin ?? d.reserva_checkout ?? d.reserva_valor != null
 
 export function DemandaReservaBlock({ demanda }: DemandaReservaBlockProps) {
   const router = useRouter()
@@ -56,6 +56,8 @@ export function DemandaReservaBlock({ demanda }: DemandaReservaBlockProps) {
 
   const openEdit = () => {
     setForm({
+      reserva_hotel_nome: demanda.reserva_hotel_nome ?? undefined,
+      reserva_hotel_endereco: demanda.reserva_hotel_endereco ?? undefined,
       reserva_checkin: demanda.reserva_checkin ?? undefined,
       reserva_checkout: demanda.reserva_checkout ?? undefined,
       reserva_valor: demanda.reserva_valor ?? undefined,
@@ -102,6 +104,18 @@ export function DemandaReservaBlock({ demanda }: DemandaReservaBlockProps) {
           {hasReserva(demanda) ? (
             <div className="space-y-3">
               <div className="grid gap-2 text-sm">
+                {demanda.reserva_hotel_nome && (
+                  <p>
+                    <span className="text-muted-foreground">Hotel:</span>{" "}
+                    {demanda.reserva_hotel_nome}
+                  </p>
+                )}
+                {demanda.reserva_hotel_endereco && (
+                  <p>
+                    <span className="text-muted-foreground">Endereço:</span>{" "}
+                    <span className="whitespace-pre-wrap">{demanda.reserva_hotel_endereco}</span>
+                  </p>
+                )}
                 {demanda.reserva_checkin && (
                   <p>
                     <span className="text-muted-foreground">Check-in:</span>{" "}
@@ -184,6 +198,31 @@ export function DemandaReservaBlock({ demanda }: DemandaReservaBlockProps) {
             <DialogTitle>{hasReserva(demanda) ? "Editar reserva" : "Adicionar reserva"}</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 py-4">
+            <div>
+              <Label htmlFor="reserva-hotel-nome">Nome do hotel</Label>
+              <Input
+                id="reserva-hotel-nome"
+                value={form.reserva_hotel_nome ?? ""}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, reserva_hotel_nome: e.target.value.trim() || undefined }))
+                }
+                placeholder="Ex: Hotel Marejada"
+              />
+            </div>
+            <div>
+              <Label htmlFor="reserva-hotel-endereco">Endereço do hotel (onde fica)</Label>
+              <Input
+                id="reserva-hotel-endereco"
+                value={form.reserva_hotel_endereco ?? ""}
+                onChange={(e) =>
+                  setForm((f) => ({
+                    ...f,
+                    reserva_hotel_endereco: e.target.value.trim() || undefined,
+                  }))
+                }
+                placeholder="Rua, número, bairro, cidade"
+              />
+            </div>
             <div>
               <Label>Check-in</Label>
               <DateTimePickerPopover

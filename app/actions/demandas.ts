@@ -503,6 +503,8 @@ export async function updateDemandaReserva(
 export async function clearDemandaReserva(demandaId: string): Promise<{ success: boolean; error?: string }> {
   const supabase = await createClient()
   const payload = {
+    reserva_hotel_nome: null,
+    reserva_hotel_endereco: null,
     reserva_checkin: null,
     reserva_checkout: null,
     reserva_valor: null,

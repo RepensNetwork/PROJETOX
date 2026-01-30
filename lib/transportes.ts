@@ -1,4 +1,4 @@
-import type { Demanda, Escala } from "@/lib/types/database"
+﻿import type { Demanda, Escala } from "@/lib/types/database"
 
 export type TransporteLeg = {
   id: string
@@ -13,6 +13,7 @@ export type TransporteLeg = {
   /** Observação / voo — campo livre, separado do número da viagem. */
   observacao?: string | null
   concluido_em?: string | null
+  duracao_minutos?: number | null
 }
 
 /** Horário padrão: buscar no hotel para levar ao terminal no dia da escala (embarques). */
@@ -85,10 +86,15 @@ function formatOffset(offsetMinutes: number): string {
 }
 
 export const buildTransportLegs = (demanda: Demanda & { escala?: Escala }): TransporteLeg[] => {
+
+  const hotelLabel = demanda.reserva_hotel_nome?.trim() || "Hotel (a confirmar)"
+
   if (Array.isArray(demanda.transporte_legs) && demanda.transporte_legs.length > 0) {
     return (demanda.transporte_legs as TransporteLeg[]).map((leg) => ({
       ...leg,
       observacao: leg.observacao ?? null,
+      pickup_local: leg.pickup_local === "Hotel (a confirmar)" ? hotelLabel : (leg.pickup_local ?? null),
+      dropoff_local: leg.dropoff_local === "Hotel (a confirmar)" ? hotelLabel : (leg.dropoff_local ?? null),
     }))
   }
 
@@ -125,7 +131,7 @@ export const buildTransportLegs = (demanda: Demanda & { escala?: Escala }): Tran
           label: "Aeroporto → Hotel",
           pickup_at: demanda.pickup_at || null,
           pickup_local: airport,
-          dropoff_local: "Hotel (a confirmar)",
+          dropoff_local: hotelLabel,
           status: "pendente",
           observacao: null,
         },
@@ -133,7 +139,7 @@ export const buildTransportLegs = (demanda: Demanda & { escala?: Escala }): Tran
           id: `${demanda.id}-leg-2`,
           label: "Hotel → Terminal",
           pickup_at: leg2PickupAt,
-          pickup_local: "Hotel (a confirmar)",
+          pickup_local: hotelLabel,
           dropoff_local: "Terminal Marejada",
           status: "pendente",
           observacao: null,
@@ -147,7 +153,7 @@ export const buildTransportLegs = (demanda: Demanda & { escala?: Escala }): Tran
         label: "Terminal → Hotel",
         pickup_at: leg1PickupAt,
         pickup_local: "Terminal",
-        dropoff_local: "Hotel (a confirmar)",
+        dropoff_local: hotelLabel,
         status: "pendente",
         observacao: null,
       },
@@ -155,7 +161,7 @@ export const buildTransportLegs = (demanda: Demanda & { escala?: Escala }): Tran
         id: `${demanda.id}-leg-2`,
         label: "Hotel → Aeroporto",
         pickup_at: null,
-        pickup_local: "Hotel (a confirmar)",
+        pickup_local: hotelLabel,
         dropoff_local: airport,
         status: "pendente",
         observacao: null,

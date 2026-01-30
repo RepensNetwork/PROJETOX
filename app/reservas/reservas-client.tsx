@@ -45,6 +45,8 @@ export function ReservasClient({ reservas }: ReservasClientProps) {
   const openEdit = (r: ReservaItem) => {
     setEditing(r)
     setForm({
+      reserva_hotel_nome: r.reserva_hotel_nome ?? undefined,
+      reserva_hotel_endereco: r.reserva_hotel_endereco ?? undefined,
       reserva_checkin: r.reserva_checkin ?? undefined,
       reserva_checkout: r.reserva_checkout ?? undefined,
       reserva_valor: r.reserva_valor ?? undefined,
@@ -86,6 +88,7 @@ export function ReservasClient({ reservas }: ReservasClientProps) {
             <thead>
               <tr className="border-b bg-muted/50">
                 <th className="text-left p-3 font-medium">Tripulante</th>
+                <th className="text-left p-3 font-medium">Hotel</th>
                 <th className="text-left p-3 font-medium">Navio / Escala</th>
                 <th className="text-left p-3 font-medium">Check-in</th>
                 <th className="text-left p-3 font-medium">Check-out</th>
@@ -100,6 +103,20 @@ export function ReservasClient({ reservas }: ReservasClientProps) {
               {reservas.map((r) => (
                 <tr key={r.id} className="border-b hover:bg-muted/30">
                   <td className="p-3 font-medium">{getTripulanteNome(r)}</td>
+                  <td className="p-3">
+                    {r.reserva_hotel_nome ? (
+                      <span title={r.reserva_hotel_endereco ?? undefined}>
+                        {r.reserva_hotel_nome}
+                        {r.reserva_hotel_endereco && (
+                          <span className="block text-xs text-muted-foreground truncate max-w-[200px]" title={r.reserva_hotel_endereco}>
+                            {r.reserva_hotel_endereco}
+                          </span>
+                        )}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </td>
                   <td className="p-3 text-muted-foreground">
                     {r.escala?.navio?.nome ?? "—"} / {r.escala?.porto ?? "—"}
                   </td>
@@ -155,6 +172,29 @@ export function ReservasClient({ reservas }: ReservasClientProps) {
             <DialogTitle>Editar reserva — {editing ? getTripulanteNome(editing) : ""}</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <Label>Nome do hotel</Label>
+              <Input
+                placeholder="Ex: Hotel Marejada"
+                value={form.reserva_hotel_nome ?? ""}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, reserva_hotel_nome: e.target.value.trim() || undefined }))
+                }
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Endereço do hotel (onde fica)</Label>
+              <Input
+                placeholder="Rua, número, bairro, cidade"
+                value={form.reserva_hotel_endereco ?? ""}
+                onChange={(e) =>
+                  setForm((f) => ({
+                    ...f,
+                    reserva_hotel_endereco: e.target.value.trim() || undefined,
+                  }))
+                }
+              />
+            </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Check-in</Label>
