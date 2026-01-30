@@ -38,6 +38,6 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // Redirecionar para o dashboard após autenticação
-  return NextResponse.redirect(new URL("/dashboard", requestUrl.origin))
+  // Tela de warmup pós-login: prefetch das páginas e depois redireciona
+  return NextResponse.redirect(new URL("/warmup", requestUrl.origin))
 }

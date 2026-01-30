@@ -61,6 +61,7 @@ export async function middleware(request: NextRequest) {
     { prefix: "/dashboard", key: "dashboard" },
     { prefix: "/emails", key: "inbox" },
     { prefix: "/motorista", key: "transportes" },
+    { prefix: "/reservas", key: "reservas" },
     { prefix: "/navios", key: "navios" },
     { prefix: "/escalas", key: "escalas" },
     { prefix: "/demandas", key: "demandas" },
@@ -77,7 +78,29 @@ export async function middleware(request: NextRequest) {
     return match?.key || null
   }
 
-  // Rotas públicas
+  /** Ordem de prioridade para página inicial do usuário (primeira tela com acesso) */
+  const landingOrder: { key: string; path: string }[] = [
+    { key: "dashboard", path: "/dashboard" },
+    { key: "intake", path: "/intake" },
+    { key: "inbox", path: "/emails" },
+    { key: "transportes", path: "/motorista" },
+    { key: "reservas", path: "/reservas" },
+    { key: "escalas", path: "/escalas" },
+    { key: "demandas", path: "/demandas" },
+    { key: "navios", path: "/navios" },
+    { key: "membros", path: "/membros" },
+    { key: "logs", path: "/logs" },
+    { key: "perfil", path: "/perfil" },
+  ]
+
+  const getFirstAllowedPath = (membro: { is_admin?: boolean; allowed_pages?: string[] | null }) => {
+    if (membro.is_admin) return "/dashboard"
+    const allowed = Array.isArray(membro.allowed_pages) ? membro.allowed_pages : []
+    const first = landingOrder.find((item) => allowed.includes(item.key))
+    return first?.path ?? "/perfil"
+  }
+
+  // Rotas públicas (warmup é pós-login, exige autenticação)
   const publicRoutes = ["/login", "/auth/callback", "/forgot-password", "/reset-password"]
   const isPublicRoute = publicRoutes.some((route) =>
     request.nextUrl.pathname.startsWith(route)
@@ -91,13 +114,6 @@ export async function middleware(request: NextRequest) {
   }
 
   if (user) {
-    // Se está autenticado e está na página de login, redirecionar para dashboard
-    if (request.nextUrl.pathname === "/login") {
-      const url = request.nextUrl.clone()
-      url.pathname = "/dashboard"
-      return applySecurityHeaders(NextResponse.redirect(url))
-    }
-
     const { data: membro, error: membroError } = await supabase
       .from("membros")
       .select("id, email, ativo, is_admin, allowed_pages, session_ip")
@@ -120,6 +136,14 @@ export async function middleware(request: NextRequest) {
       return applySecurityHeaders(NextResponse.redirect(url))
     }
 
+    // Raiz ou login: redirecionar para a primeira tela que o usuário tem acesso
+    const firstAllowed = getFirstAllowedPath(membro)
+    if (request.nextUrl.pathname === "/" || request.nextUrl.pathname === "/login") {
+      const url = request.nextUrl.clone()
+      url.pathname = firstAllowed
+      return applySecurityHeaders(NextResponse.redirect(url))
+    }
+
     const currentIp = getClientIp()
     if (currentIp && !membro.session_ip) {
       await supabase
@@ -137,7 +161,7 @@ export async function middleware(request: NextRequest) {
         const allowed = Array.isArray(membro.allowed_pages) ? membro.allowed_pages : []
         if (!allowed.includes(permissionKey)) {
           const url = request.nextUrl.clone()
-          url.pathname = "/dashboard"
+          url.pathname = getFirstAllowedPath(membro)
           url.searchParams.set("denied", "1")
           return applySecurityHeaders(NextResponse.redirect(url))
         }

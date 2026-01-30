@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { LayoutDashboard, Ship, Calendar, ClipboardList, Menu, Users, LogOut, User, Shield, Mail, Mic, Car, ChevronDown, FolderOpen, Settings } from "lucide-react"
+import { LayoutDashboard, Ship, Calendar, ClipboardList, Menu, Users, LogOut, User, Shield, Mail, Mic, Car, ChevronDown, FolderOpen, Settings, Hotel } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { useState, useEffect } from "react"
@@ -31,6 +31,7 @@ const operacoesNav: NavItem[] = [
   { key: "intake", name: "Criar Demanda", href: "/intake", icon: Mic },
   { key: "inbox", name: "Inbox", href: "/emails", icon: Mail },
   { key: "transportes", name: "Transportes", href: "/motorista", icon: Car },
+  { key: "reservas", name: "Reservas (Hotel)", href: "/reservas", icon: Hotel },
   { key: "escalas", name: "Escalas", href: "/escalas", icon: Calendar },
   { key: "demandas", name: "Demandas", href: "/demandas", icon: ClipboardList },
 ]
@@ -50,6 +51,28 @@ function canAccess(membro: Membro | null, itemKey: string): boolean {
 
 function filterByAccess<T extends { key: string }>(membro: Membro | null, items: T[]): T[] {
   return items.filter((item) => canAccess(membro, item.key))
+}
+
+const landingOrder: { key: string; href: string }[] = [
+  { key: "dashboard", href: "/dashboard" },
+  { key: "intake", href: "/intake" },
+  { key: "inbox", href: "/emails" },
+  { key: "transportes", href: "/motorista" },
+  { key: "reservas", href: "/reservas" },
+  { key: "escalas", href: "/escalas" },
+  { key: "demandas", href: "/demandas" },
+  { key: "navios", href: "/navios" },
+  { key: "membros", href: "/membros" },
+  { key: "logs", href: "/logs" },
+  { key: "perfil", href: "/perfil" },
+]
+
+function getFirstAllowedHref(membro: Membro | null): string {
+  if (!membro) return "/dashboard"
+  if (membro.is_admin) return "/dashboard"
+  const allowed = Array.isArray(membro.allowed_pages) ? membro.allowed_pages : []
+  const first = landingOrder.find((item) => allowed.includes(item.key))
+  return first?.href ?? "/perfil"
 }
 
 export function Header() {
@@ -150,7 +173,7 @@ export function Header() {
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-16 items-center">
-        <Link href="/dashboard" className="flex items-center mr-6">
+        <Link href={getFirstAllowedHref(membro)} className="flex items-center mr-6">
           <span className="font-semibold text-lg hidden sm:inline-block">Asa Brokers</span>
         </Link>
 

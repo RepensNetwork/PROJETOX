@@ -67,10 +67,21 @@ const config: Config = {
           from: { height: 'var(--radix-accordion-content-height)' },
           to: { height: '0' },
         },
+        'warmup-float': {
+          '0%, 100%': { transform: 'translateY(0)' },
+          '50%': { transform: 'translateY(-6px)' },
+        },
+        'warmup-line': {
+          '0%': { transform: 'scaleX(0.3)', opacity: '0.8' },
+          '50%': { transform: 'scaleX(1)', opacity: '1' },
+          '100%': { transform: 'scaleX(0.3)', opacity: '0.8' },
+        },
       },
       animation: {
         'accordion-down': 'accordion-down 0.2s ease-out',
         'accordion-up': 'accordion-up 0.2s ease-out',
+        'warmup-float': 'warmup-float 2s ease-in-out infinite',
+        'warmup-line': 'warmup-line 1.8s ease-in-out infinite',
       },
     },
   },

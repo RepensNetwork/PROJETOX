@@ -284,7 +284,7 @@ export function EscalaForm({ escala, navios, trigger, onSuccess }: EscalaFormPro
                 <DateTimePickerPopover
                   id="data_chegada"
                   value={formData.data_chegada || undefined}
-                  placeholder="Selecionar data e hora"
+                  placeholder="DD/MM/AAAA HH:MM ou use o calendário"
                   onChange={(iso) => setFormData({ ...formData, data_chegada: iso ?? "" })}
                 />
               </div>
@@ -294,7 +294,7 @@ export function EscalaForm({ escala, navios, trigger, onSuccess }: EscalaFormPro
                 <DateTimePickerPopover
                   id="data_saida"
                   value={formData.data_saida || undefined}
-                  placeholder="Selecionar data e hora"
+                  placeholder="DD/MM/AAAA HH:MM ou use o calendário"
                   onChange={(iso) => setFormData({ ...formData, data_saida: iso ?? "" })}
                 />
               </div>
@@ -412,7 +412,7 @@ export function EscalaForm({ escala, navios, trigger, onSuccess }: EscalaFormPro
                       <DateTimePickerPopover
                         id="data_chegada"
                         value={formData.data_chegada || undefined}
-                        placeholder="Selecionar data e hora"
+                        placeholder="DD/MM/AAAA HH:MM ou use o calendário"
                         onChange={(iso) => setFormData({ ...formData, data_chegada: iso ?? "" })}
                       />
                     </div>
@@ -422,7 +422,7 @@ export function EscalaForm({ escala, navios, trigger, onSuccess }: EscalaFormPro
                       <DateTimePickerPopover
                         id="data_saida"
                         value={formData.data_saida || undefined}
-                        placeholder="Selecionar data e hora"
+                        placeholder="DD/MM/AAAA HH:MM ou use o calendário"
                         onChange={(iso) => setFormData({ ...formData, data_saida: iso ?? "" })}
                       />
                     </div>

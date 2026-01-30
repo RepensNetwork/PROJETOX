@@ -75,7 +75,7 @@ const tipoOptions = [
 ]
 
 const categoriaOptions = [
-  { value: "passageiros", label: "Passageiros" },
+  { value: "passageiros", label: "Tripulantes" },
   { value: "saude", label: "Saúde" },
   { value: "suprimentos", label: "Suprimentos" },
   { value: "abastecimento", label: "Abastecimento" },

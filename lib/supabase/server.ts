@@ -2,7 +2,12 @@ import { createServerClient } from "@supabase/ssr"
 import { cookies } from "next/headers"
 
 export async function createClient() {
-  const cookieStore = await cookies()
+  let cookieStore: Awaited<ReturnType<typeof cookies>> | null = null
+  try {
+    cookieStore = await cookies()
+  } catch {
+    // cookies() pode falhar em alguns contextos (ex.: geração estática)
+  }
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -22,12 +27,13 @@ export async function createClient() {
     {
       cookies: {
         getAll() {
-          return cookieStore.getAll()
+          return cookieStore?.getAll?.() ?? []
         },
         setAll(cookiesToSet) {
+          if (!cookieStore) return
           try {
             cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
+              cookieStore!.set(name, value, options)
             )
           } catch {
             // The `setAll` method was called from a Server Component.

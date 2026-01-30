@@ -81,7 +81,22 @@ export async function getUpcomingEscalas(): Promise<(Escala & { navio: Navio; de
     return []
   }
 
-  return escalas || []
+  // Incluir escalas que chegam hoje/futuro OU que saem hoje/futuro (inclui em andamento)
+  const now = new Date()
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  startOfToday.setHours(0, 0, 0, 0)
+
+  const filtered = (escalas || []).filter((escala) => {
+    const chegada = new Date(escala.data_chegada)
+    const saida = escala.data_saida ? new Date(escala.data_saida) : null
+    const chegadaOk = chegada >= startOfToday
+    const saidaOk = saida ? saida >= startOfToday : false
+    return chegadaOk || saidaOk
+  })
+
+  // Ordenar pela escala mais próxima (data de chegada ascendente)
+  filtered.sort((a, b) => new Date(a.data_chegada).getTime() - new Date(b.data_chegada).getTime())
+  return filtered
 }
 
 export async function getRecentDemandas(): Promise<(Demanda & { escala: Escala & { navio: Navio }; responsavel: Membro | null })[]> {

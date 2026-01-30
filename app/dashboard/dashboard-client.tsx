@@ -283,7 +283,7 @@ export function DashboardClient({
         >
           <CardHeader>
             <CardTitle>Embarques e desembarques</CardTitle>
-            <CardDescription>Demandas de passageiros</CardDescription>
+            <CardDescription>Demandas de tripulantes</CardDescription>
           </CardHeader>
           <CardContent>
             <p className="text-3xl font-semibold">{embarqueDesembarqueDemandas.length}</p>

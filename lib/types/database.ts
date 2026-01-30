@@ -80,6 +80,7 @@ export interface Escala {
 export interface Demanda {
   id: string
   escala_id: string
+  demanda_pai_id?: string | null
   tipo: DemandaTipo
   categoria: DemandaCategoria
   titulo: string
@@ -92,6 +93,13 @@ export interface Demanda {
   transporte_grupo?: string | null
   transporte_concluido_em?: string | null
   transporte_legs?: any
+  /** Reserva hotel */
+  reserva_checkin?: string | null
+  reserva_checkout?: string | null
+  reserva_valor?: number | null
+  reserva_cafe_incluso?: boolean | null
+  reserva_almoco_incluso?: boolean | null
+  reserva_confirmado?: boolean | null
   responsavel_id?: string | null
   prioridade: DemandaPrioridade
   status: DemandaStatus
@@ -102,6 +110,10 @@ export interface Demanda {
   updated_at: string
   escala?: Escala
   responsavel?: Membro
+  /** Demanda principal (tripulante) quando esta é sub-demanda */
+  demanda_pai?: Demanda | null
+  /** Sub-demandas (ex: transporte, hotel) quando esta é demanda principal */
+  sub_demandas?: Demanda[]
 }
 
 export interface Comentario {

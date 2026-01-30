@@ -54,8 +54,8 @@ const prioridadeOptions = [
 ]
 
 const tipoOptions = [
-  { value: "embarque_passageiros", label: "Embarque de Passageiros" },
-  { value: "desembarque_passageiros", label: "Desembarque de Passageiros" },
+  { value: "embarque_passageiros", label: "Embarque de Tripulantes" },
+  { value: "desembarque_passageiros", label: "Desembarque de Tripulantes" },
   { value: "controle_listas", label: "Controle de Listas" },
   { value: "suporte_especial", label: "Suporte Especial" },
   { value: "visita_medica", label: "Visita Médica" },
@@ -85,7 +85,7 @@ const tipoOptions = [
 ]
 
 const categoriaOptions = [
-  { value: "passageiros", label: "Passageiros" },
+  { value: "passageiros", label: "Tripulantes" },
   { value: "saude", label: "Saúde" },
   { value: "suprimentos", label: "Suprimentos" },
   { value: "abastecimento", label: "Abastecimento" },

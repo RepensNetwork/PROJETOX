@@ -50,8 +50,8 @@ export function EscalasPopup({ escalas, open, onOpenChange }: EscalasPopupProps)
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[700px] max-h-[80vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-[700px] flex flex-col max-h-[90vh]">
+        <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Ship className="h-5 w-5" />
             Próximas Escalas
@@ -60,7 +60,7 @@ export function EscalasPopup({ escalas, open, onOpenChange }: EscalasPopupProps)
             Escalas futuras mais próximas ({escalas.length})
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-3">
+        <div className="space-y-3 min-h-0 flex-1 overflow-y-auto -mx-1 px-1">
           {escalas.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               Nenhuma escala futura encontrada
@@ -146,8 +146,8 @@ export function DemandasPopup({ demandas, open, onOpenChange, title, description
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[700px] max-h-[80vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-[700px] flex flex-col max-h-[90vh]">
+        <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <ClipboardList className="h-5 w-5" />
             {title}
@@ -156,7 +156,7 @@ export function DemandasPopup({ demandas, open, onOpenChange, title, description
             {description} ({demandas.length})
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-3">
+        <div className="space-y-3 min-h-0 flex-1 overflow-y-auto -mx-1 px-1">
           {demandas.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               Nenhuma demanda encontrada
@@ -231,8 +231,8 @@ interface NaviosPopupProps {
 export function NaviosPopup({ navios, open, onOpenChange }: NaviosPopupProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[700px] max-h-[80vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-[700px] flex flex-col max-h-[90vh]">
+        <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Ship className="h-5 w-5" />
             Navios Cadastrados
@@ -241,7 +241,7 @@ export function NaviosPopup({ navios, open, onOpenChange }: NaviosPopupProps) {
             Todos os navios da frota ({navios.length})
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-3">
+        <div className="space-y-3 min-h-0 flex-1 overflow-y-auto -mx-1 px-1">
           {navios.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               Nenhum navio cadastrado

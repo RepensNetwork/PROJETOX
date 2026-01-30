@@ -2,6 +2,8 @@
 
 import { createClient } from "@/lib/supabase/server"
 import type { Demanda, Escala, Navio, Membro, Comentario, Historico } from "@/lib/types/database"
+import { buildTransportLegs, type TransporteLeg } from "@/lib/transportes"
+import type { UpdateReservaHotelInput } from "@/lib/reservas"
 import { revalidatePath } from "next/cache"
 import { criarAlertasParaDemanda } from "@/app/actions/alertas"
 
@@ -387,4 +389,135 @@ export async function getEscalasForSelect(): Promise<(Escala & { navio: Navio })
   }
 
   return escalas || []
+}
+
+/** Atualiza a lista de trechos de transporte da demanda (para demandas tripulante). */
+export async function updateDemandaTransporteLegs(
+  demandaId: string,
+  legs: TransporteLeg[]
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = await createClient()
+
+  const primaryLeg = legs[0]
+  const updateData: Record<string, unknown> = {
+    transporte_legs: legs,
+    updated_at: new Date().toISOString(),
+  }
+  if (primaryLeg) {
+    updateData.pickup_at = primaryLeg.pickup_at ?? null
+    updateData.pickup_local = primaryLeg.pickup_local ?? null
+    updateData.dropoff_local = primaryLeg.dropoff_local ?? null
+  }
+
+  const { error } = await supabase.from("demandas").update(updateData).eq("id", demandaId)
+  if (error) {
+    console.error("Error updating transporte legs:", error)
+    return { success: false, error: error.message }
+  }
+  revalidatePath("/demandas")
+  revalidatePath(`/demandas/${demandaId}`)
+  revalidatePath("/motorista")
+  return { success: true }
+}
+
+/** Adiciona um trecho de transporte à demanda (tripulante). */
+export async function addTransportLeg(
+  demandaId: string,
+  leg: { label: string; pickup_at?: string | null; pickup_local?: string | null; dropoff_local?: string | null }
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = await createClient()
+  const { data: demanda, error: fetchError } = await supabase
+    .from("demandas")
+    .select("*")
+    .eq("id", demandaId)
+    .single()
+
+  if (fetchError || !demanda) {
+    return { success: false, error: "Demanda não encontrada" }
+  }
+
+  const currentLegs = buildTransportLegs(demanda as Demanda & { escala?: Escala })
+  const newLeg: TransporteLeg = {
+    id: `${demandaId}-leg-${Date.now()}`,
+    label: leg.label || "Trecho",
+    pickup_at: leg.pickup_at ?? null,
+    pickup_local: leg.pickup_local ?? null,
+    dropoff_local: leg.dropoff_local ?? null,
+    status: "pendente",
+    observacao: null,
+  }
+  return updateDemandaTransporteLegs(demandaId, [...currentLegs, newLeg])
+}
+
+/** Remove um trecho de transporte da demanda (tripulante). */
+export async function removeTransportLeg(
+  demandaId: string,
+  legId: string
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = await createClient()
+  const { data: demanda, error: fetchError } = await supabase
+    .from("demandas")
+    .select("*")
+    .eq("id", demandaId)
+    .single()
+
+  if (fetchError || !demanda) {
+    return { success: false, error: "Demanda não encontrada" }
+  }
+
+  const currentLegs = buildTransportLegs(demanda as Demanda & { escala?: Escala })
+  const filtered = currentLegs.filter((l) => l.id !== legId)
+  if (filtered.length === currentLegs.length) {
+    return { success: false, error: "Trecho não encontrado" }
+  }
+  return updateDemandaTransporteLegs(demandaId, filtered)
+}
+
+/** Atualiza dados de reserva de hotel na própria demanda (tripulante). Não exige tipo reserva_hotel. */
+export async function updateDemandaReserva(
+  demandaId: string,
+  input: UpdateReservaHotelInput
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = await createClient()
+
+  const payload: Record<string, unknown> = { updated_at: new Date().toISOString() }
+  if (input.reserva_checkin !== undefined) payload.reserva_checkin = input.reserva_checkin || null
+  if (input.reserva_checkout !== undefined) payload.reserva_checkout = input.reserva_checkout || null
+  if (input.reserva_valor !== undefined) payload.reserva_valor = input.reserva_valor ?? null
+  if (input.reserva_cafe_incluso !== undefined) payload.reserva_cafe_incluso = input.reserva_cafe_incluso ?? false
+  if (input.reserva_almoco_incluso !== undefined) payload.reserva_almoco_incluso = input.reserva_almoco_incluso ?? false
+  if (input.reserva_confirmado !== undefined) payload.reserva_confirmado = input.reserva_confirmado ?? false
+
+  const { error } = await supabase.from("demandas").update(payload).eq("id", demandaId)
+  if (error) {
+    console.error("Error updating demanda reserva:", error)
+    return { success: false, error: error.message }
+  }
+  revalidatePath("/demandas")
+  revalidatePath(`/demandas/${demandaId}`)
+  revalidatePath("/reservas")
+  return { success: true }
+}
+
+/** Remove a reserva de hotel da demanda (zera campos reserva_*). */
+export async function clearDemandaReserva(demandaId: string): Promise<{ success: boolean; error?: string }> {
+  const supabase = await createClient()
+  const payload = {
+    reserva_checkin: null,
+    reserva_checkout: null,
+    reserva_valor: null,
+    reserva_cafe_incluso: false,
+    reserva_almoco_incluso: false,
+    reserva_confirmado: false,
+    updated_at: new Date().toISOString(),
+  }
+  const { error } = await supabase.from("demandas").update(payload).eq("id", demandaId)
+  if (error) {
+    console.error("Error clearing demanda reserva:", error)
+    return { success: false, error: error.message }
+  }
+  revalidatePath("/demandas")
+  revalidatePath(`/demandas/${demandaId}`)
+  revalidatePath("/reservas")
+  return { success: true }
 }

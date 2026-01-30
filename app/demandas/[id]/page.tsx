@@ -11,10 +11,11 @@ import { StatusChanger } from "@/components/demandas/status-changer"
 import { AssignResponsavel } from "@/components/demandas/assign-responsavel"
 import { getDemandaWithDetails, getEscalasForSelect } from "@/app/actions/demandas"
 import { getMembros } from "@/app/actions/dashboard"
+import { DemandaTransporteBlock } from "@/components/demandas/demanda-transporte-block"
+import { DemandaReservaBlock } from "@/components/demandas/demanda-reserva-block"
 import { 
   Ship, 
   MapPin, 
-  Calendar,
   ArrowLeft,
   Pencil,
   Clock,
@@ -59,6 +60,13 @@ const prioridadeLabels: Record<Demanda["prioridade"], string> = {
   alta: "Alta",
   urgente: "Urgente",
 }
+
+/** Tipos de demanda que são tripulante: exibem Transporte e Reserva na própria página. */
+const TIPOS_TRIPULANTE: Demanda["tipo"][] = [
+  "embarque_passageiros",
+  "desembarque_passageiros",
+  "transporte_terrestre",
+]
 
 export default async function DemandaDetailPage({ params }: DemandaDetailPageProps) {
   const { id } = await params
@@ -202,6 +210,13 @@ export default async function DemandaDetailPage({ params }: DemandaDetailPagePro
                 </div>
               </CardContent>
             </Card>
+
+            {TIPOS_TRIPULANTE.includes(demanda.tipo) && (
+              <>
+                <DemandaTransporteBlock demanda={demanda} />
+                <DemandaReservaBlock demanda={demanda} />
+              </>
+            )}
 
             <Card>
               <CardHeader>

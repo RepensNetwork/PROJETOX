@@ -19,6 +19,7 @@ function LoginForm() {
 
   // Verificar se há erro na URL (vindo do callback)
   useEffect(() => {
+    if (!searchParams) return
     const errorParam = searchParams.get("error")
     if (errorParam === "auth_failed") {
       setError("Falha na autenticação. Tente novamente.")
@@ -54,8 +55,8 @@ function LoginForm() {
         // Aguardar um pouco para garantir que a sessão seja salva
         await new Promise(resolve => setTimeout(resolve, 100))
 
-        // Redirecionar para o dashboard usando window.location para forçar recarregamento completo
-        window.location.href = "/dashboard"
+        // Tela de warmup: carrega páginas permitidas e depois redireciona
+        window.location.href = "/warmup"
       }
     } catch (err: any) {
       console.error("Login error:", err)
