@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils"
 
 interface StatsCardsProps {
   stats: DashboardStats
-  escalas: (Escala & { navio: Navio; demandas?: Demanda[] })[]
+  escalas: (Escala & { navio: Navio; demandas?: Pick<Demanda, "id" | "titulo" | "status">[] })[]
   allDemandas: (Demanda & { escala: Escala & { navio: Navio }; responsavel: any })[]
   navios: Navio[]
 }
@@ -47,7 +47,7 @@ export function StatsCards({ stats, escalas, allDemandas, navios }: StatsCardsPr
     <>
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card 
-          className="cursor-pointer hover:bg-muted/50 transition-colors"
+          className="cursor-pointer hover:bg-muted/40 hover:shadow-elevation-3 transition-all duration-200"
           onClick={() => setEscalasOpen(true)}
         >
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -72,7 +72,7 @@ export function StatsCards({ stats, escalas, allDemandas, navios }: StatsCardsPr
         </Card>
 
         <Card 
-          className="cursor-pointer hover:bg-muted/50 transition-colors"
+          className="cursor-pointer hover:bg-muted/40 hover:shadow-elevation-3 transition-all duration-200"
           onClick={() => setDemandasOpen(true)}
         >
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -96,7 +96,7 @@ export function StatsCards({ stats, escalas, allDemandas, navios }: StatsCardsPr
 
         <Card 
           className={cn(
-            "border-destructive/50 cursor-pointer hover:bg-muted/50 transition-colors",
+            "border-destructive/40 cursor-pointer hover:bg-muted/40 hover:shadow-elevation-3 transition-all duration-200",
             (stats.demandasAtrasadas + stats.demandasCriticas + stats.demandasBloqueadas) === 0 && "opacity-50 cursor-not-allowed"
           )}
           onClick={() => {
@@ -138,7 +138,7 @@ export function StatsCards({ stats, escalas, allDemandas, navios }: StatsCardsPr
 
         <Card 
           className={cn(
-            "border-success/50 cursor-pointer hover:bg-muted/50 transition-colors",
+            "border-success/40 cursor-pointer hover:bg-muted/40 hover:shadow-elevation-3 transition-all duration-200",
             stats.demandasConcluidas === 0 && "opacity-50 cursor-not-allowed"
           )}
           onClick={() => {

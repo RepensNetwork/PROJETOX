@@ -11,46 +11,49 @@ import type {
 
 export async function getDashboardStats(): Promise<DashboardStats> {
   const supabase = await createClient()
+  const now = new Date().toISOString()
 
-  // Get active escalas count
-  const { count: totalEscalasAtivas } = await supabase
-    .from("escalas")
-    .select("*", { count: "exact", head: true })
-    .in("status", ["planejada", "em_operacao"])
+  const [
+    resEscalas,
+    resTotal,
+    resPendentes,
+    resEmAndamento,
+    resConcluidas,
+    resBloqueadas,
+    resAtrasadas,
+    resCriticas,
+  ] = await Promise.all([
+    supabase.from("escalas").select("*", { count: "exact", head: true }).in("status", ["planejada", "em_operacao"]),
+    supabase.from("demandas").select("id", { count: "exact", head: true }),
+    supabase.from("demandas").select("id", { count: "exact", head: true }).eq("status", "pendente"),
+    supabase.from("demandas").select("id", { count: "exact", head: true }).eq("status", "em_andamento"),
+    supabase.from("demandas").select("id", { count: "exact", head: true }).eq("status", "concluida"),
+    supabase.from("demandas").select("id", { count: "exact", head: true }).eq("status", "aguardando_terceiro"),
+    supabase.from("demandas").select("id", { count: "exact", head: true }).lt("prazo", now).neq("status", "concluida"),
+    supabase.from("demandas").select("id", { count: "exact", head: true }).eq("prioridade", "urgente").neq("status", "concluida"),
+  ])
 
-  // Get all demandas with their status
-  const { data: demandas } = await supabase
-    .from("demandas")
-    .select("id, status, prioridade, prazo")
-
-  const now = new Date()
-  const stats: DashboardStats = {
-    totalEscalasAtivas: totalEscalasAtivas || 0,
-    totalDemandas: demandas?.length || 0,
-    demandasPendentes: demandas?.filter((d: Demanda) => d.status === "pendente").length || 0,
-    demandasEmAndamento: demandas?.filter((d: Demanda) => d.status === "em_andamento").length || 0,
-    demandasConcluidas: demandas?.filter((d: Demanda) => d.status === "concluida").length || 0,
-    demandasBloqueadas: demandas?.filter((d: Demanda) => d.status === "aguardando_terceiro").length || 0,
-    demandasAtrasadas: demandas?.filter((d: Demanda) => 
-      d.prazo && 
-      new Date(d.prazo) < now && 
-      d.status !== "concluida"
-    ).length || 0,
-    demandasCriticas: demandas?.filter((d: Demanda) => d.prioridade === "urgente" && d.status !== "concluida").length || 0,
+  return {
+    totalEscalasAtivas: resEscalas.count ?? 0,
+    totalDemandas: resTotal.count ?? 0,
+    demandasPendentes: resPendentes.count ?? 0,
+    demandasEmAndamento: resEmAndamento.count ?? 0,
+    demandasConcluidas: resConcluidas.count ?? 0,
+    demandasBloqueadas: resBloqueadas.count ?? 0,
+    demandasAtrasadas: resAtrasadas.count ?? 0,
+    demandasCriticas: resCriticas.count ?? 0,
   }
-
-  return stats
 }
 
-export async function getActiveEscalas(): Promise<(Escala & { navio: Navio; demandas: Demanda[] })[]> {
+export async function getActiveEscalas(): Promise<(Escala & { navio: Navio; demandas: Pick<Demanda, "id" | "titulo" | "status">[] })[]> {
   const supabase = await createClient()
 
   const { data: escalas, error } = await supabase
     .from("escalas")
     .select(`
       *,
-      navio:navios(*),
-      demandas(*)
+      navio:navios(id, nome, companhia),
+      demandas(id, titulo, status)
     `)
     .in("status", ["planejada", "em_operacao"])
     .order("data_chegada", { ascending: true })
@@ -63,15 +66,15 @@ export async function getActiveEscalas(): Promise<(Escala & { navio: Navio; dema
   return escalas || []
 }
 
-export async function getUpcomingEscalas(): Promise<(Escala & { navio: Navio; demandas: Demanda[] })[]> {
+export async function getUpcomingEscalas(): Promise<(Escala & { navio: Navio; demandas: Pick<Demanda, "id" | "titulo" | "status">[] })[]> {
   const supabase = await createClient()
 
   const { data: escalas, error } = await supabase
     .from("escalas")
     .select(`
       *,
-      navio:navios(*),
-      demandas(*)
+      navio:navios(id, nome, companhia),
+      demandas(id, titulo, status)
     `)
     .in("status", ["planejada", "em_operacao"])
     .order("data_chegada", { ascending: true })

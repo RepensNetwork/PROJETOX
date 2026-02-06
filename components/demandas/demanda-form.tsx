@@ -24,10 +24,39 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Plus, Loader2 } from "lucide-react"
+import { Plus, Loader2, Trash2, Hotel } from "lucide-react"
 import { DateTimePickerPopover } from "@/components/ui/datetime-picker-popover"
 import { createDemanda, updateDemanda } from "@/app/actions/demandas"
+import { EscalaSelectWithCalendar } from "@/components/demandas/escala-select-with-calendar"
+import { buildTransportLegs } from "@/lib/transportes"
 import type { Demanda, Escala, Navio, Membro } from "@/lib/types/database"
+
+/** Retorna o id da escala cuja data_chegada está mais próxima de hoje (prioriza futuras). */
+function getClosestEscalaId(escalas: (Escala & { navio: Navio })[]): string | null {
+  if (!escalas.length) return null
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const todayTime = today.getTime()
+  const withTime = escalas.map((e) => {
+    const d = e.data_chegada ? new Date(e.data_chegada.slice(0, 10)) : new Date(NaN)
+    d.setHours(0, 0, 0, 0)
+    return { escala: e, time: d.getTime() }
+  }).filter((x) => !isNaN(x.time))
+  if (!withTime.length) return escalas[0]?.id ?? null
+  const future = withTime.filter((x) => x.time >= todayTime)
+  const toPick = future.length > 0 ? future : withTime
+  const sorted = future.length > 0
+    ? [...toPick].sort((a, b) => a.time - b.time)
+    : [...toPick].sort((a, b) => b.time - a.time)
+  return sorted[0]?.escala.id ?? null
+}
+
+type TransportLegForm = {
+  id: string
+  pickup_at: string
+  pickup_local: string
+  dropoff_local: string
+}
 
 const TIPOS_TRIPULANTE: Demanda["tipo"][] = [
   "embarque_passageiros",
@@ -146,7 +175,22 @@ export function DemandaForm({
     pickup_at: getIsoOrEmpty(demanda?.pickup_at),
     pickup_local: demanda?.pickup_local || "",
     dropoff_local: demanda?.dropoff_local || "",
+    reserva_hotel_nome: demanda?.reserva_hotel_nome || "",
+    reserva_hotel_endereco: demanda?.reserva_hotel_endereco || "",
+    reserva_checkin: getIsoOrEmpty(demanda?.reserva_checkin),
+    reserva_checkout: getIsoOrEmpty(demanda?.reserva_checkout),
+    reserva_valor: demanda?.reserva_valor != null ? String(demanda.reserva_valor) : "",
   })
+
+  const initialLegs: TransportLegForm[] = demanda
+    ? buildTransportLegs(demanda).map((leg) => ({
+        id: leg.id,
+        pickup_at: leg.pickup_at ?? "",
+        pickup_local: leg.pickup_local ?? "",
+        dropoff_local: leg.dropoff_local ?? "",
+      }))
+    : [{ id: "new-leg-0", pickup_at: "", pickup_local: "", dropoff_local: "" }]
+  const [transportLegs, setTransportLegs] = useState<TransportLegForm[]>(initialLegs)
 
   // Atualizar escala_id quando escalaId mudar
   React.useEffect(() => {
@@ -154,6 +198,33 @@ export function DemandaForm({
       setFormData(prev => ({ ...prev, escala_id: escalaId }))
     }
   }, [escalaId, demanda])
+
+  React.useEffect(() => {
+    if (!open) return
+    if (demanda) {
+      setTransportLegs(
+        buildTransportLegs(demanda).map((leg) => ({
+          id: leg.id,
+          pickup_at: leg.pickup_at ?? "",
+          pickup_local: leg.pickup_local ?? "",
+          dropoff_local: leg.dropoff_local ?? "",
+        }))
+      )
+    } else {
+      setTransportLegs([{ id: "new-leg-0", pickup_at: "", pickup_local: "", dropoff_local: "" }])
+    }
+  }, [open, demanda])
+
+  // Ao abrir o diálogo (nova demanda), pré-selecionar a escala mais próxima
+  React.useEffect(() => {
+    if (!open || demanda || escalaId) return
+    if (escalas && escalas.length > 0) {
+      const closestId = getClosestEscalaId(escalas)
+      if (closestId) {
+        setFormData((prev) => ({ ...prev, escala_id: closestId }))
+      }
+    }
+  }, [open, demanda, escalaId, escalas])
 
   // Ao abrir o diálogo (nova demanda), preencher tipo/categoria conforme initialTipo
   React.useEffect(() => {
@@ -217,22 +288,56 @@ export function DemandaForm({
         }
       }
 
-      let pickupAtISO: string | undefined = undefined
-      if (formData.pickup_at && formData.pickup_at.trim() !== "") {
-        try {
-          const pickupDate = new Date(formData.pickup_at)
-          if (isNaN(pickupDate.getTime())) {
-            alert("Data de busca inválida. Por favor, verifique o formato.")
-            setLoading(false)
-            return
+      const demandaId = demanda?.id ?? `temp-${Date.now()}`
+      const legsForSubmit = transportLegs.map((leg, index) => {
+        let pickupAtISO: string | null = null
+        if (leg.pickup_at?.trim()) {
+          try {
+            const d = new Date(leg.pickup_at)
+            if (!isNaN(d.getTime())) pickupAtISO = d.toISOString()
+          } catch {
+            // ignore
           }
-          pickupAtISO = pickupDate.toISOString()
-        } catch (error) {
-          alert("Erro ao processar data de busca. Por favor, verifique o formato.")
-          setLoading(false)
-          return
+        }
+        return {
+          id: leg.id.startsWith("new-leg-") ? `${demandaId}-leg-${index}` : leg.id,
+          label: `Trecho ${index + 1}`,
+          pickup_at: pickupAtISO,
+          pickup_local: leg.pickup_local?.trim() || null,
+          dropoff_local: leg.dropoff_local?.trim() || null,
+          status: "pendente" as const,
+        }
+      })
+
+      const firstLeg = legsForSubmit[0]
+      const pickupAtISO = firstLeg?.pickup_at ?? undefined
+      const pickup_local = firstLeg?.pickup_local ?? undefined
+      const dropoff_local = firstLeg?.dropoff_local ?? undefined
+
+      let reserva_checkin_iso: string | undefined
+      let reserva_checkout_iso: string | undefined
+      if (showTransporte && formData.reserva_checkin?.trim()) {
+        try {
+          const d = new Date(formData.reserva_checkin)
+          reserva_checkin_iso = !isNaN(d.getTime()) ? d.toISOString() : undefined
+        } catch {
+          reserva_checkin_iso = undefined
         }
       }
+      if (showTransporte && formData.reserva_checkout?.trim()) {
+        try {
+          const d = new Date(formData.reserva_checkout)
+          reserva_checkout_iso = !isNaN(d.getTime()) ? d.toISOString() : undefined
+        } catch {
+          reserva_checkout_iso = undefined
+        }
+      }
+      const reserva_valor_num =
+        showTransporte && formData.reserva_valor?.trim()
+          ? parseFloat(formData.reserva_valor.replace(",", "."))
+          : undefined
+      const reservaValorOk =
+        reserva_valor_num === undefined || (!Number.isNaN(reserva_valor_num) && reserva_valor_num >= 0)
 
       const data = {
         escala_id: escalaId || formData.escala_id,
@@ -241,12 +346,20 @@ export function DemandaForm({
         titulo: formData.titulo.trim(),
         descricao: formData.descricao?.trim() || undefined,
         pickup_at: pickupAtISO,
-        pickup_local: formData.pickup_local?.trim() || undefined,
-        dropoff_local: formData.dropoff_local?.trim() || undefined,
+        pickup_local,
+        dropoff_local,
         status: formData.status as Demanda["status"],
         prioridade: formData.prioridade as Demanda["prioridade"],
         responsavel_id: formData.responsavel_id || undefined,
         prazo: prazoISO,
+        transporte_legs: showTransporte ? legsForSubmit : undefined,
+        ...(showTransporte && {
+          reserva_hotel_nome: formData.reserva_hotel_nome?.trim() || undefined,
+          reserva_hotel_endereco: formData.reserva_hotel_endereco?.trim() || undefined,
+          reserva_checkin: reserva_checkin_iso,
+          reserva_checkout: reserva_checkout_iso,
+          reserva_valor: reservaValorOk && reserva_valor_num !== undefined ? reserva_valor_num : undefined,
+        }),
       }
 
       console.log("Enviando demanda:", data)
@@ -275,7 +388,13 @@ export function DemandaForm({
             pickup_at: "",
             pickup_local: "",
             dropoff_local: "",
+            reserva_hotel_nome: "",
+            reserva_hotel_endereco: "",
+            reserva_checkin: "",
+            reserva_checkout: "",
+            reserva_valor: "",
           })
+          setTransportLegs([{ id: "new-leg-0", pickup_at: "", pickup_local: "", dropoff_local: "" }])
         }
       } else {
         alert(result.error || "Erro ao salvar demanda. Verifique o console para mais detalhes.")
@@ -317,22 +436,13 @@ export function DemandaForm({
             {!escalaId && escalas && escalas.length > 0 && (
               <div className="space-y-2">
                 <Label htmlFor="escala_id">Escala *</Label>
-                <Select
+                <EscalaSelectWithCalendar
+                  escalas={escalas}
                   value={formData.escala_id}
-                  onValueChange={(value) => setFormData({ ...formData, escala_id: value })}
+                  onSelect={(id) => setFormData({ ...formData, escala_id: id })}
+                  id="escala_id"
                   required
-                >
-                  <SelectTrigger id="escala_id">
-                    <SelectValue placeholder="Selecione uma escala" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {escalas.map((escala) => (
-                      <SelectItem key={escala.id} value={escala.id}>
-                        {escala.navio.nome} - {escala.porto}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                />
               </div>
             )}
             {!escalaId && (!escalas || escalas.length === 0) && (
@@ -412,34 +522,149 @@ export function DemandaForm({
                 <p className="text-xs font-medium text-muted-foreground">
                   Transporte (opcional) — motorista e hotel podem ser definidos na página da demanda
                 </p>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="pickup_at">Horário de busca</Label>
-                    <DateTimePickerPopover
-                      id="pickup_at"
-                      value={formData.pickup_at || undefined}
-                      placeholder="Selecionar data e hora"
-                      onChange={(iso) => setFormData({ ...formData, pickup_at: iso ?? "" })}
-                    />
+                {transportLegs.map((leg, index) => (
+                  <div key={leg.id} className="space-y-3 rounded border bg-background/50 p-3">
+                    {transportLegs.length > 1 && (
+                      <div className="flex justify-end">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive hover:text-destructive"
+                          onClick={() =>
+                            setTransportLegs((prev) => prev.filter((l) => l.id !== leg.id))
+                          }
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    )}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Horário de busca</Label>
+                        <DateTimePickerPopover
+                          value={leg.pickup_at || undefined}
+                          placeholder="Selecionar data e hora"
+                          onChange={(iso) =>
+                            setTransportLegs((prev) =>
+                              prev.map((l) =>
+                                l.id === leg.id ? { ...l, pickup_at: iso ?? "" } : l
+                              )
+                            )
+                          }
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Local de busca</Label>
+                        <Input
+                          value={leg.pickup_local}
+                          onChange={(e) =>
+                            setTransportLegs((prev) =>
+                              prev.map((l) =>
+                                l.id === leg.id ? { ...l, pickup_local: e.target.value } : l
+                              )
+                            )
+                          }
+                          placeholder="Origem / local de pickup"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Destino</Label>
+                      <Input
+                        value={leg.dropoff_local}
+                        onChange={(e) =>
+                          setTransportLegs((prev) =>
+                            prev.map((l) =>
+                              l.id === leg.id ? { ...l, dropoff_local: e.target.value } : l
+                            )
+                          )
+                        }
+                        placeholder="Destino / local de entrega"
+                      />
+                    </div>
                   </div>
+                ))}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-full gap-2"
+                  onClick={() =>
+                    setTransportLegs((prev) => [
+                      ...prev,
+                      {
+                        id: `new-leg-${Date.now()}`,
+                        pickup_at: "",
+                        pickup_local: "",
+                        dropoff_local: "",
+                      },
+                    ])
+                  }
+                >
+                  <Plus className="h-4 w-4" />
+                  Adicionar mais um transporte
+                </Button>
+              </div>
+            )}
+
+            {showTransporte && (
+              <div className="rounded-md border bg-muted/30 p-3 space-y-3">
+                <p className="text-xs font-medium text-muted-foreground flex items-center gap-2">
+                  <Hotel className="h-4 w-4" />
+                  Reserva de Hotel (opcional)
+                </p>
+                <div className="grid grid-cols-1 gap-3">
                   <div className="space-y-2">
-                    <Label htmlFor="pickup_local">Local de busca</Label>
+                    <Label htmlFor="reserva_hotel_nome">Nome do hotel</Label>
                     <Input
-                      id="pickup_local"
-                      value={formData.pickup_local}
-                      onChange={(e) => setFormData({ ...formData, pickup_local: e.target.value })}
-                      placeholder="Origem / local de pickup"
+                      id="reserva_hotel_nome"
+                      value={formData.reserva_hotel_nome}
+                      onChange={(e) => setFormData({ ...formData, reserva_hotel_nome: e.target.value })}
+                      placeholder="Ex.: Hotel Itajaí Tur"
                     />
                   </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="dropoff_local">Destino</Label>
-                  <Input
-                    id="dropoff_local"
-                    value={formData.dropoff_local}
-                    onChange={(e) => setFormData({ ...formData, dropoff_local: e.target.value })}
-                    placeholder="Destino / local de entrega"
-                  />
+                  <div className="space-y-2">
+                    <Label htmlFor="reserva_hotel_endereco">Endereço do hotel</Label>
+                    <Input
+                      id="reserva_hotel_endereco"
+                      value={formData.reserva_hotel_endereco}
+                      onChange={(e) => setFormData({ ...formData, reserva_hotel_endereco: e.target.value })}
+                      placeholder="Onde fica o hotel"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <Label>Check-in</Label>
+                      <DateTimePickerPopover
+                        mode="date"
+                        value={formData.reserva_checkin || undefined}
+                        placeholder="Data check-in"
+                        onChange={(iso) => setFormData({ ...formData, reserva_checkin: iso ?? "" })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Check-out</Label>
+                      <DateTimePickerPopover
+                        mode="date"
+                        value={formData.reserva_checkout || undefined}
+                        placeholder="Data check-out"
+                        onChange={(iso) => setFormData({ ...formData, reserva_checkout: iso ?? "" })}
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="reserva_valor">Valor (R$)</Label>
+                    <Input
+                      id="reserva_valor"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={formData.reserva_valor}
+                      onChange={(e) => setFormData({ ...formData, reserva_valor: e.target.value })}
+                      placeholder="0,00"
+                    />
+                  </div>
                 </div>
               </div>
             )}

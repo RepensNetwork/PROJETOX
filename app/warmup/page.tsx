@@ -8,6 +8,7 @@ import type { Membro } from "@/lib/types/database"
 
 const LANDING_ORDER: { key: string; href: string }[] = [
   { key: "dashboard", href: "/dashboard" },
+  { key: "financeiro", href: "/financeiro" },
   { key: "intake", href: "/intake" },
   { key: "inbox", href: "/emails" },
   { key: "transportes", href: "/motorista" },

@@ -1,9 +1,10 @@
 "use server"
 
+import { cache } from "react"
 import { createClient } from "@/lib/supabase/server"
 import type { Membro } from "@/lib/types/database"
 
-export async function getCurrentUser(): Promise<{ user: any; membro: Membro | null } | null> {
+export const getCurrentUser = cache(async (): Promise<{ user: any; membro: Membro | null } | null> => {
   const supabase = await createClient()
 
   const {
@@ -27,7 +28,7 @@ export async function getCurrentUser(): Promise<{ user: any; membro: Membro | nu
   }
 
   return { user, membro }
-}
+})
 
 export async function signOut() {
   const supabase = await createClient()

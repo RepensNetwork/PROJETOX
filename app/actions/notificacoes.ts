@@ -32,6 +32,7 @@ export async function criarNotificacoes(
   }
 
   revalidatePath(`/escalas/${escalaId}`)
+  revalidatePath("/", "layout")
   return { success: true }
 }
 

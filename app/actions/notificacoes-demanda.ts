@@ -23,6 +23,7 @@ export async function criarNotificacaoDemanda(
 
   revalidatePath(`/demandas/${demandaId}`)
   revalidatePath("/dashboard")
+  revalidatePath("/", "layout")
   return { success: true }
 }
 

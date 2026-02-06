@@ -6,6 +6,8 @@ import { buildTransportLegs, type TransporteLeg } from "@/lib/transportes"
 import type { UpdateReservaHotelInput } from "@/lib/reservas"
 import { revalidatePath } from "next/cache"
 import { criarAlertasParaDemanda } from "@/app/actions/alertas"
+import { syncDespesaReservaHotel } from "@/app/actions/financeiro"
+import { criarNotificacaoDemanda } from "@/app/actions/notificacoes-demanda"
 
 export async function getDemandas(): Promise<(Demanda & { escala: Escala & { navio: Navio }; responsavel: Membro | null })[]> {
   const supabase = await createClient()
@@ -27,9 +29,59 @@ export async function getDemandas(): Promise<(Demanda & { escala: Escala & { nav
   return demandas || []
 }
 
+/** Versão enxuta para o dashboard: limit + select reduzido para carregar mais rápido. */
+export async function getDemandasForDashboard(
+  limit = 500
+): Promise<(Demanda & { escala: Escala & { navio: Navio }; responsavel: Membro | null })[]> {
+  const supabase = await createClient()
+
+  const { data: demandas, error } = await supabase
+    .from("demandas")
+    .select(`
+      id, tipo, titulo, status, prioridade, prazo, escala_id, responsavel_id, updated_at, created_at,
+      escala:escalas(id, porto, data_chegada, data_saida, navio:navios(id, nome, companhia)),
+      responsavel:membros(id, nome, email)
+    `)
+    .order("updated_at", { ascending: false })
+    .limit(limit)
+
+  if (error) {
+    console.error("Error fetching demandas for dashboard:", error)
+    return []
+  }
+
+  return (demandas || []) as (Demanda & { escala: Escala & { navio: Navio }; responsavel: Membro | null })[]
+}
+
+/** Lista de demandas para a página /demandas: limit + select enxuto para carregar mais rápido. */
+export async function getDemandasForList(
+  limit = 800
+): Promise<(Demanda & { escala: Escala & { navio: Navio }; responsavel: Membro | null })[]> {
+  const supabase = await createClient()
+
+  const { data: demandas, error } = await supabase
+    .from("demandas")
+    .select(`
+      id, tipo, categoria, titulo, descricao, status, prioridade, prazo, escala_id, responsavel_id, updated_at, created_at, reserva_hotel_nome, reserva_checkin, reserva_checkout, reserva_valor, reserva_confirmado, transporte_status,
+      escala:escalas(id, porto, data_chegada, data_saida, navio:navios(id, nome, companhia)),
+      responsavel:membros(id, nome, email)
+    `)
+    .order("updated_at", { ascending: false })
+    .limit(limit)
+
+  if (error) {
+    console.error("Error fetching demandas for list:", error)
+    return []
+  }
+
+  return (demandas || []) as (Demanda & { escala: Escala & { navio: Navio }; responsavel: Membro | null })[]
+}
+
 export async function getDemandasByResponsavel(
   membroId: string
 ): Promise<(Demanda & { escala: Escala & { navio: Navio }; responsavel: Membro | null })[]> {
+  if (!membroId || membroId.trim() === "") return []
+
   const supabase = await createClient()
 
   const { data: demandas, error } = await supabase
@@ -95,6 +147,15 @@ export async function getDemandaWithDetails(id: string): Promise<(Demanda & {
   return demanda
 }
 
+type TransportLegInput = {
+  id?: string
+  label?: string
+  pickup_at?: string | null
+  pickup_local?: string | null
+  dropoff_local?: string | null
+  status?: string
+}
+
 export async function createDemanda(data: {
   escala_id: string
   tipo: Demanda["tipo"]
@@ -108,6 +169,12 @@ export async function createDemanda(data: {
   prioridade: Demanda["prioridade"]
   responsavel_id?: string
   prazo?: string
+  transporte_legs?: TransportLegInput[] | null
+  reserva_hotel_nome?: string | null
+  reserva_hotel_endereco?: string | null
+  reserva_checkin?: string | null
+  reserva_checkout?: string | null
+  reserva_valor?: number | null
 }): Promise<{ success: boolean; demanda?: Demanda; error?: string }> {
   try {
     console.log("createDemanda chamado com:", data)
@@ -131,7 +198,7 @@ export async function createDemanda(data: {
 
     const supabase = await createClient()
 
-    const insertData = {
+    const insertData: Record<string, unknown> = {
       escala_id: data.escala_id,
       tipo: data.tipo,
       categoria: data.categoria,
@@ -145,6 +212,11 @@ export async function createDemanda(data: {
       responsavel_id: data.responsavel_id || null,
       prazo: data.prazo || null,
     }
+    if (data.reserva_hotel_nome !== undefined) insertData.reserva_hotel_nome = data.reserva_hotel_nome || null
+    if (data.reserva_hotel_endereco !== undefined) insertData.reserva_hotel_endereco = data.reserva_hotel_endereco || null
+    if (data.reserva_checkin !== undefined) insertData.reserva_checkin = data.reserva_checkin || null
+    if (data.reserva_checkout !== undefined) insertData.reserva_checkout = data.reserva_checkout || null
+    if (data.reserva_valor !== undefined) insertData.reserva_valor = data.reserva_valor ?? null
 
     console.log("Inserindo no banco:", insertData)
 
@@ -165,6 +237,18 @@ export async function createDemanda(data: {
     }
 
     console.log("Demanda criada com sucesso:", demanda)
+
+    if (data.transporte_legs && data.transporte_legs.length > 0) {
+      const fixedLegs = data.transporte_legs.map((leg, i) => ({
+        id: `${demanda.id}-leg-${i}`,
+        label: leg.label ?? `Trecho ${i + 1}`,
+        pickup_at: leg.pickup_at ?? null,
+        pickup_local: leg.pickup_local ?? null,
+        dropoff_local: leg.dropoff_local ?? null,
+        status: leg.status === "concluido" ? "concluido" : "pendente",
+      }))
+      await supabase.from("demandas").update({ transporte_legs: fixedLegs, updated_at: new Date().toISOString() }).eq("id", demanda.id)
+    }
 
     const {
       data: { user },
@@ -203,6 +287,14 @@ export async function createDemanda(data: {
       console.warn("Erro ao criar alerta (não crítico):", alertaError)
     }
 
+    if (demanda.responsavel_id) {
+      try {
+        await criarNotificacaoDemanda(demanda.id, demanda.responsavel_id)
+      } catch (notifError) {
+        console.warn("Erro ao criar notificação para responsável (não crítico):", notifError)
+      }
+    }
+
     revalidatePath("/demandas")
     revalidatePath(`/demandas/${demanda.id}`)
     revalidatePath("/dashboard")
@@ -226,6 +318,12 @@ export async function updateDemanda(
     prioridade?: Demanda["prioridade"]
     responsavel_id?: string | null
     prazo?: string | null
+    transporte_legs?: TransportLegInput[] | null
+    reserva_hotel_nome?: string | null
+    reserva_hotel_endereco?: string | null
+    reserva_checkin?: string | null
+    reserva_checkout?: string | null
+    reserva_valor?: number | null
   }
 ): Promise<{ success: boolean; error?: string }> {
   const supabase = await createClient()
@@ -250,6 +348,10 @@ export async function updateDemanda(
     return { success: false, error: error.message }
   }
 
+  if (data.responsavel_id && data.responsavel_id !== (currentDemanda as any)?.responsavel_id) {
+    await criarNotificacaoDemanda(id, data.responsavel_id)
+  }
+
   const trackFields: Array<keyof typeof data> = [
     "titulo",
     "descricao",
@@ -260,6 +362,12 @@ export async function updateDemanda(
     "prioridade",
     "responsavel_id",
     "prazo",
+    "transporte_legs",
+    "reserva_hotel_nome",
+    "reserva_hotel_endereco",
+    "reserva_checkin",
+    "reserva_checkout",
+    "reserva_valor",
   ]
   const oldValues: Record<string, unknown> = {}
   const newValues: Record<string, unknown> = {}
@@ -495,6 +603,7 @@ export async function updateDemandaReserva(
     console.error("Error updating demanda reserva:", error)
     return { success: false, error: error.message }
   }
+  await syncDespesaReservaHotel(demandaId)
   revalidatePath("/demandas")
   revalidatePath(`/demandas/${demandaId}`)
   revalidatePath("/reservas")
@@ -520,6 +629,7 @@ export async function clearDemandaReserva(demandaId: string): Promise<{ success:
     console.error("Error clearing demanda reserva:", error)
     return { success: false, error: error.message }
   }
+  await syncDespesaReservaHotel(demandaId)
   revalidatePath("/demandas")
   revalidatePath(`/demandas/${demandaId}`)
   revalidatePath("/reservas")

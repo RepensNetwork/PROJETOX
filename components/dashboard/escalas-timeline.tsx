@@ -10,7 +10,7 @@ import { ptBR } from "date-fns/locale"
 import Link from "next/link"
 
 interface EscalasTimelineProps {
-  escalas: (Escala & { navio: Navio; demandas: Demanda[] })[]
+  escalas: (Escala & { navio: Navio; demandas: Pick<Demanda, "id" | "titulo" | "status">[] })[]
 }
 
 const statusColors: Record<Escala["status"], string> = {

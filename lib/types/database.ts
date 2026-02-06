@@ -264,3 +264,82 @@ export interface EscalaComDemandas extends Escala {
     demandasConcluidas: number
   }
 }
+
+// ——— Módulo Financeiro (Agenciamento Marítimo) ———
+export type FinanceiroTipo = 'receita' | 'despesa'
+export type LancamentoStatus = 'rascunho' | 'previsto' | 'confirmado' | 'liquidado' | 'cancelado'
+export type ComissaoStatus = 'pendente' | 'calculada' | 'faturada' | 'paga' | 'cancelada'
+export type ContaTipo = 'caixa' | 'banco' | 'outro'
+
+export interface FinanceiroCategoria {
+  id: string
+  nome: string
+  tipo: FinanceiroTipo
+  cor: string
+  icone?: string | null
+  ativo: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface FinanceiroConta {
+  id: string
+  nome: string
+  tipo: ContaTipo
+  instituicao?: string | null
+  agencia?: string | null
+  numero?: string | null
+  saldo_inicial: number
+  ativo: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface FinanceiroLancamento {
+  id: string
+  conta_id?: string | null
+  categoria_id?: string | null
+  tipo: FinanceiroTipo
+  valor: number
+  data_vencimento: string
+  data_liquidacao?: string | null
+  descricao?: string | null
+  documento_ref?: string | null
+  escala_id?: string | null
+  demanda_id?: string | null
+  status: LancamentoStatus
+  observacoes?: string | null
+  created_at: string
+  updated_at: string
+  created_by?: string | null
+  categoria?: FinanceiroCategoria | null
+  conta?: FinanceiroConta | null
+  escala?: Escala & { navio?: Navio } | null
+  demanda?: Demanda | null
+}
+
+export interface FinanceiroComissao {
+  id: string
+  escala_id: string
+  descricao?: string | null
+  valor_bruto: number
+  percentual_comissao: number
+  valor_comissao: number
+  status: ComissaoStatus
+  data_previsao?: string | null
+  data_recebimento?: string | null
+  lancamento_id?: string | null
+  created_at: string
+  updated_at: string
+  escala?: Escala & { navio?: Navio } | null
+}
+
+export interface FinanceiroResumo {
+  totalReceitas: number
+  totalDespesas: number
+  saldoPeriodo: number
+  aReceber: number
+  aPagar: number
+  receitasLidadas: number
+  despesasLidadas: number
+}

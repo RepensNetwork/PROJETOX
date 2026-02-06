@@ -12,18 +12,17 @@ import { format } from "date-fns"
 import { ptBR } from "date-fns/locale/pt-BR"
 
 export default async function AdminUsuariosPage() {
-  // Verificar autenticação e permissões de admin
-  const currentUser = await getCurrentUser()
-  
+  const [currentUser, membros] = await Promise.all([
+    getCurrentUser(),
+    getMembros(),
+  ])
+
   if (!currentUser || !currentUser.membro) {
     redirect("/login")
   }
-
   if (!currentUser.membro.is_admin) {
     notFound()
   }
-
-  const membros = await getMembros()
 
   const membrosAtivos = membros.filter(m => m.ativo)
   const membrosInativos = membros.filter(m => !m.ativo)

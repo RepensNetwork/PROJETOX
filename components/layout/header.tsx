@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { LayoutDashboard, Ship, Calendar, ClipboardList, Menu, Users, LogOut, User, Shield, Mail, Mic, Car, ChevronDown, FolderOpen, Settings, Hotel } from "lucide-react"
+import { LayoutDashboard, Ship, Calendar, ClipboardList, Menu, Users, LogOut, User, Shield, Mail, Mic, Car, ChevronDown, FolderOpen, Settings, Hotel, Wallet } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { useState, useEffect } from "react"
@@ -25,6 +25,7 @@ type NavItem = { key: string; name: string; href: string; icon: React.ComponentT
 
 const primaryNav: NavItem[] = [
   { key: "dashboard", name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { key: "financeiro", name: "Financeiro", href: "/financeiro", icon: Wallet },
 ]
 
 const operacoesNav: NavItem[] = [
@@ -55,6 +56,7 @@ function filterByAccess<T extends { key: string }>(membro: Membro | null, items:
 
 const landingOrder: { key: string; href: string }[] = [
   { key: "dashboard", href: "/dashboard" },
+  { key: "financeiro", href: "/financeiro" },
   { key: "intake", href: "/intake" },
   { key: "inbox", href: "/emails" },
   { key: "transportes", href: "/motorista" },
@@ -171,14 +173,14 @@ export function Header() {
   }
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container flex h-16 items-center">
-        <Link href={getFirstAllowedHref(membro)} className="flex items-center mr-6">
-          <span className="font-semibold text-lg hidden sm:inline-block">Asa Brokers</span>
+    <header className="header-glass sticky top-0 z-50 w-full border-b border-border/80">
+      <div className="container flex h-14 items-center">
+        <Link href={getFirstAllowedHref(membro)} className="flex items-center gap-2 mr-8">
+          <span className="font-semibold text-lg tracking-tight hidden sm:inline-block">Asa Brokers</span>
         </Link>
 
         {/* Desktop Navigation: 3 principais + submenus */}
-        <nav className="hidden md:flex items-center gap-1">
+        <nav className="hidden md:flex items-center gap-0.5">
           {/* 1. Dashboard */}
           {filterByAccess(membro, primaryNav).map((item) => {
             const isActive = pathname === item.href
@@ -367,7 +369,7 @@ export function Header() {
           </Sheet>
         </div>
       </div>
-      <div className="border-t border-border/60 bg-muted/50">
+      <div className="border-t border-border/50 bg-muted/30">
         <div className="container h-8 overflow-hidden flex items-center">
           <div className="animate-marquee whitespace-nowrap text-xs font-medium flex items-center gap-3">
             {lembretesLoading ? (

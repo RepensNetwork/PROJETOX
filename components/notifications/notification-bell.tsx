@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
 import useSWR from "swr"
 import { Button } from "@/components/ui/button"
 import {
@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/popover"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Bell, Check, CheckCheck, Trash2 } from "lucide-react"
+import { Bell, Check, CheckCheck, Trash2, X } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
 import { ptBR } from "date-fns/locale/pt-BR"
 import { getNotificacoes, marcarNotificacaoComoLida, marcarTodasNotificacoesComoLidas, limparTodasNotificacoes } from "@/app/actions/notificacoes"
@@ -49,16 +49,19 @@ interface NotificationBellProps {
 
 export function NotificationBell({ membroId }: NotificationBellProps) {
   const [open, setOpen] = useState(false)
+  const [popupOpen, setPopupOpen] = useState(false)
+  const popupDismissedRef = useRef(false)
+  const prevCountRef = useRef(0)
   const router = useRouter()
 
   const { data, isLoading, mutate } = useSWR<NotificationsData>(
     membroId ? `notifications-${membroId}` : null,
     () => fetchNotifications(membroId),
     {
-      refreshInterval: 30_000,
+      refreshInterval: 15_000,
       revalidateOnFocus: true,
       revalidateOnReconnect: true,
-      dedupingInterval: 5_000,
+      dedupingInterval: 2_000,
     }
   )
 
@@ -71,7 +74,28 @@ export function NotificationBell({ membroId }: NotificationBellProps) {
   const countDemandasNaoLidas = notificacoesDemanda.filter((n) => !n.lida).length
   const countNaoLidas = countMensagensNaoLidas + countDemandasNaoLidas
 
+  useEffect(() => {
+    if (loading || !membroId) return
+    if (countNaoLidas > 0) {
+      if (countNaoLidas > prevCountRef.current) popupDismissedRef.current = false
+      prevCountRef.current = countNaoLidas
+      if (!popupDismissedRef.current) setPopupOpen(true)
+    }
+  }, [loading, countNaoLidas, membroId])
+
   const revalidate = () => mutate(undefined, { revalidate: true })
+
+  const handleVerNotificacoes = () => {
+    setPopupOpen(false)
+    popupDismissedRef.current = true
+    setOpen(true)
+    revalidate()
+  }
+
+  const handleFecharPopup = () => {
+    setPopupOpen(false)
+    popupDismissedRef.current = true
+  }
 
   const handleMarcarComoLida = async (notificacaoId: string, escalaId: string) => {
     try {
@@ -160,14 +184,52 @@ export function NotificationBell({ membroId }: NotificationBellProps) {
   }
 
   return (
-    <Popover
-      open={open}
-      onOpenChange={(next) => {
-        setOpen(next)
-        if (next) revalidate()
-      }}
-    >
-      <PopoverTrigger asChild>
+    <>
+      {popupOpen && countNaoLidas > 0 && (
+        <div
+          className="fixed top-16 right-4 z-[100] max-w-sm rounded-lg border bg-card shadow-lg p-4 animate-in fade-in slide-in-from-top-2 duration-300"
+          role="alert"
+        >
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10">
+              <Bell className="h-5 w-5 text-primary" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-sm">Novas notificações</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Você tem {countNaoLidas} notificação{countNaoLidas !== 1 ? "ões" : ""} não lida
+                {countNaoLidas !== 1 ? "s" : ""}.
+              </p>
+              <div className="flex items-center gap-2 mt-3">
+                <Button size="sm" className="h-8 text-xs" onClick={handleVerNotificacoes}>
+                  Ver notificações
+                </Button>
+                <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={handleFecharPopup}>
+                  Fechar
+                </Button>
+              </div>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 shrink-0"
+              onClick={handleFecharPopup}
+              aria-label="Fechar"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
+
+      <Popover
+        open={open}
+        onOpenChange={(next) => {
+          setOpen(next)
+          if (next) revalidate()
+        }}
+      >
+        <PopoverTrigger asChild>
         <Button variant="ghost" size="icon" className="relative">
           <Bell className="h-5 w-5" />
           {countNaoLidas > 0 && (
@@ -332,5 +394,6 @@ export function NotificationBell({ membroId }: NotificationBellProps) {
         </ScrollArea>
       </PopoverContent>
     </Popover>
+    </>
   )
 }

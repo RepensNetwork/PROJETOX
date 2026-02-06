@@ -4,16 +4,18 @@ import { createClient } from "@/lib/supabase/server"
 import type { Escala, Navio, Demanda, Membro } from "@/lib/types/database"
 import { revalidatePath } from "next/cache"
 
-export async function getEscalas(): Promise<(Escala & { navio: Navio })[]> {
+export async function getEscalas(limit?: number): Promise<(Escala & { navio: Navio })[]> {
   const supabase = await createClient()
 
-  const { data: escalas, error } = await supabase
+  const base = supabase
     .from("escalas")
     .select(`
       *,
-      navio:navios(*)
+      navio:navios(id, nome, companhia)
     `)
     .order("data_chegada", { ascending: false })
+  const { data: escalas, error } =
+    limit != null ? await base.limit(limit) : await base
 
   if (error) {
     console.error("Error fetching escalas:", error)

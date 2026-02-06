@@ -132,6 +132,8 @@ const statusOptions: { value: Demanda["status"]; label: string }[] = [
 export function DemandasPopup({ demandas, open, onOpenChange, title, description }: DemandasPopupProps) {
   const router = useRouter()
   const [updatingId, setUpdatingId] = useState<string | null>(null)
+  /** Status otimista: atualiza a UI na hora; limpa ao fechar o popup */
+  const [localStatus, setLocalStatus] = useState<Record<string, Demanda["status"]>>({})
 
   const statusColors: Record<Demanda["status"], string> = {
     pendente: "bg-warning/10 text-warning-foreground border-warning/30",
@@ -165,6 +167,7 @@ export function DemandasPopup({ demandas, open, onOpenChange, title, description
 
   const handleStatusChange = async (demandaId: string, newStatus: Demanda["status"]) => {
     setUpdatingId(demandaId)
+    setLocalStatus((prev) => ({ ...prev, [demandaId]: newStatus }))
     try {
       await updateDemanda(demandaId, { status: newStatus })
       router.refresh()
@@ -173,8 +176,13 @@ export function DemandasPopup({ demandas, open, onOpenChange, title, description
     }
   }
 
+  const handleOpenChange = (next: boolean) => {
+    if (!next) setLocalStatus({})
+    onOpenChange(next)
+  }
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-[700px] flex flex-col max-h-[90vh]">
         <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2">
@@ -192,9 +200,10 @@ export function DemandasPopup({ demandas, open, onOpenChange, title, description
             </div>
           ) : (
             demandas.map((demanda) => {
+              const displayStatus = localStatus[demanda.id] ?? demanda.status
               const isOverdue = demanda.prazo && 
                 new Date(demanda.prazo) < new Date() && 
-                demanda.status !== "concluida"
+                displayStatus !== "concluida"
               const isUpdating = updatingId === demanda.id
 
               return (
@@ -240,14 +249,14 @@ export function DemandasPopup({ demandas, open, onOpenChange, title, description
                         <Button
                           variant="ghost"
                           size="sm"
-                          className={`h-auto py-1 px-2 font-normal ${statusColors[demanda.status]} hover:opacity-90`}
+                          className={`h-auto py-1 px-2 font-normal ${statusColors[displayStatus]} hover:opacity-90`}
                           disabled={isUpdating}
                         >
                           {isUpdating ? (
                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
                           ) : (
                             <>
-                              {statusLabels[demanda.status]}
+                              {statusLabels[displayStatus]}
                               <ChevronDown className="h-3.5 w-3.5 ml-1 opacity-70" />
                             </>
                           )}
@@ -258,7 +267,7 @@ export function DemandasPopup({ demandas, open, onOpenChange, title, description
                           <DropdownMenuItem
                             key={opt.value}
                             onClick={() => handleStatusChange(demanda.id, opt.value)}
-                            disabled={demanda.status === opt.value}
+                            disabled={displayStatus === opt.value}
                           >
                             {opt.label}
                           </DropdownMenuItem>

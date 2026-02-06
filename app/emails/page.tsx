@@ -33,16 +33,18 @@ export default async function EmailsPage({ searchParams }: EmailsPageProps) {
       (process.env.IMAP_HOST && process.env.IMAP_USER && process.env.IMAP_PASSWORD)
   )
 
-  const navios = await getNavios()
-  const escalas = await getEscalasForSelect()
-  const emails = await getEmails({
-    navioId: searchParams?.navio || null,
-    topic: searchParams?.topic || null,
-    status: searchParams?.status || null,
-    query: searchParams?.q || null,
-    dateFrom: searchParams?.from || null,
-    dateTo: searchParams?.to || null,
-  })
+  const [navios, escalas, emails] = await Promise.all([
+    getNavios(),
+    getEscalasForSelect(),
+    getEmails({
+      navioId: searchParams?.navio || null,
+      topic: searchParams?.topic || null,
+      status: searchParams?.status || null,
+      query: searchParams?.q || null,
+      dateFrom: searchParams?.from || null,
+      dateTo: searchParams?.to || null,
+    }),
+  ])
 
   return (
     <div className="min-h-screen bg-background">

@@ -99,12 +99,15 @@ export async function gerarRelatorioTransportesPDF(params: RelatorioTransportesP
 
     doc.setFont("helvetica", "bold")
     doc.setFontSize(11)
+    const parts = slot.split(" ")
     const slotLabel =
       slot === "A definir"
         ? "Viagem a definir"
-        : slot.includes(" ")
-          ? `Viagem em ${slot.split(" ")[0]} às ${slot.split(" ")[1]}`
-          : `Viagem às ${slot}`
+        : parts.length >= 2 && !slot.includes("—")
+          ? `Viagem em ${parts[0]} às ${parts[1]}`
+          : parts.length >= 1
+            ? `Viagem — ${slot}`
+            : `Viagem às ${slot}`
     doc.text(`${slotLabel} (${entries.length} ${entries.length === 1 ? "tripulante" : "tripulantes"})`, margin, y)
     y += lineHeight + 2
 

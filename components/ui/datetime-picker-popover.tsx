@@ -89,7 +89,7 @@ export function DateTimePickerPopover({
     end: endOfMonth(month),
   })
   const firstDay = startOfMonth(month).getDay()
-  const emptySlots = firstDay === 0 ? 6 : firstDay - 1
+  const emptySlots = firstDay
 
   const handleApply = () => {
     const d = selectedDate ?? new Date(month.getFullYear(), month.getMonth(), 1)
@@ -138,8 +138,8 @@ export function DateTimePickerPopover({
           </Button>
         </PopoverTrigger>
       </div>
-      <PopoverContent className="w-auto p-0" align="start">
-        <div className="p-3 space-y-3">
+      <PopoverContent className="w-auto p-0 bg-popover text-popover-foreground" align="start">
+        <div className="p-3 space-y-3 bg-popover text-popover-foreground">
           <div className="flex items-center justify-between gap-2">
             <Button
               type="button"

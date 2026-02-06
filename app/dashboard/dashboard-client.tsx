@@ -3,6 +3,8 @@
 import { useMemo, useState } from "react"
 import Link from "next/link"
 import type { Demanda, Escala, Membro, Navio } from "@/lib/types/database"
+import type { ReservaItem } from "@/lib/reservas"
+import { getTripulanteNome } from "@/lib/reservas"
 import type { AlertaComDemanda } from "@/app/actions/alertas"
 import { EscalasTimeline } from "@/components/dashboard/escalas-timeline"
 import { DemandasClient } from "./demandas-client"
@@ -20,7 +22,7 @@ import { formatDistanceToNow } from "date-fns"
 import { ptBR } from "date-fns/locale/pt-BR"
 
 interface DashboardClientProps {
-  escalas: (Escala & { navio: Navio; demandas: Demanda[] })[]
+  escalas: (Escala & { navio: Navio; demandas: Pick<Demanda, "id" | "titulo" | "status">[] })[]
   urgentDemandas: (Demanda & { escala: Escala & { navio: Navio }; responsavel: Membro | null })[]
   recentDemandas: (Demanda & { escala: Escala & { navio: Navio }; responsavel: Membro | null })[]
   allDemandas: (Demanda & { escala: Escala & { navio: Navio }; responsavel: Membro | null })[]
@@ -28,6 +30,7 @@ interface DashboardClientProps {
   alertas: AlertaComDemanda[]
   membros: Membro[]
   navios: Navio[]
+  reservasHotel: ReservaItem[]
 }
 
 /** Mesmos tipos considerados "transportes" na tela do motorista (app/actions/transportes.ts). */
@@ -60,6 +63,7 @@ export function DashboardClient({
   alertas,
   membros,
   navios,
+  reservasHotel,
 }: DashboardClientProps) {
   const [navioId, setNavioId] = useState<string | null>(null)
   const [dateFilter, setDateFilter] = useState<string | null>(null)
@@ -96,6 +100,17 @@ export function DashboardClient({
     })
   }
 
+  const applyReservaFilters = (reservas: ReservaItem[]) => {
+    return reservas.filter((r) => {
+      const escalaNavioId = r.escala?.navio?.id ?? r.escala?.navio_id
+      const matchesNavio = !navioId || escalaNavioId === navioId
+      const baseDate = r.reserva_checkin ?? r.escala?.data_chegada
+      const dateKey = toDateKey(baseDate || null)
+      const matchesDate = !dateFilter || (dateKey && dateKey === dateFilter)
+      return matchesNavio && matchesDate
+    })
+  }
+
   const demandasHoje = useMemo(() => {
     if (!todayKey) return []
     return allDemandas.filter((demanda) => {
@@ -109,12 +124,9 @@ export function DashboardClient({
   const filteredDemandasHoje = useMemo(() => applyDemandaFilters(demandasHoje), [demandasHoje, navioId, dateFilter])
   const filteredMyDemandas = useMemo(() => applyDemandaFilters(myDemandas), [myDemandas, navioId, dateFilter])
 
-  const hotelDemandas = useMemo(
-    () =>
-      applyDemandaFilters(
-        allDemandas.filter((demanda) => demanda.tipo === "reserva_hotel")
-      ),
-    [allDemandas, navioId, dateFilter]
+  const filteredReservasHotel = useMemo(
+    () => applyReservaFilters(reservasHotel),
+    [reservasHotel, navioId, dateFilter]
   )
   const transporteDemandas = useMemo(
     () =>
@@ -150,7 +162,7 @@ export function DashboardClient({
           : "Tripulantes"
   const dialogList =
     dialogType === "hotel"
-      ? hotelDemandas
+      ? filteredReservasHotel
       : dialogType === "transporte"
         ? transporteDemandas
         : dialogType === "embarque"
@@ -233,10 +245,10 @@ export function DashboardClient({
         >
           <CardHeader>
             <CardTitle>Reservas de hotel</CardTitle>
-            <CardDescription>Demandas de hospedagem</CardDescription>
+            <CardDescription>Reservas de hospedagem</CardDescription>
           </CardHeader>
           <CardContent>
-            <p className="text-3xl font-semibold">{hotelDemandas.length}</p>
+            <p className="text-3xl font-semibold">{filteredReservasHotel.length}</p>
           </CardContent>
         </Card>
 
@@ -331,16 +343,46 @@ export function DashboardClient({
           <DialogHeader>
             <DialogTitle>{dialogTitle}</DialogTitle>
             <DialogDescription>
-              Clique em uma demanda para ver detalhes na página de demandas.
+              {dialogType === "hotel"
+                ? "Clique em uma reserva para ver detalhes na página de demandas."
+                : "Clique em uma demanda para ver detalhes na página de demandas."}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             {dialogList.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Nenhuma demanda encontrada.</p>
+              <p className="text-sm text-muted-foreground">
+                {dialogType === "hotel" ? "Nenhuma reserva encontrada." : "Nenhuma demanda encontrada."}
+              </p>
+            ) : dialogType === "hotel" ? (
+              <div className="divide-y rounded-lg border">
+                {(dialogList as ReservaItem[]).slice(0, 10).map((reserva) => {
+                  const checkinStr = reserva.reserva_checkin
+                    ? new Date(reserva.reserva_checkin).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })
+                    : ""
+                  const checkoutStr = reserva.reserva_checkout
+                    ? new Date(reserva.reserva_checkout).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })
+                    : ""
+                  const periodoStr = checkinStr && checkoutStr ? `${checkinStr}-${checkoutStr}` : checkinStr || checkoutStr || ""
+                  const tituloReserva = periodoStr
+                    ? `Reserva de hotel - ${getTripulanteNome(reserva)} (${periodoStr})`
+                    : reserva.titulo || `Reserva - ${getTripulanteNome(reserva)}`
+                  return (
+                    <Link key={reserva.id} href={`/demandas/${reserva.id}`} className="block p-3 hover:bg-accent/50 transition-colors rounded -mx-1">
+                      <p className="font-medium">{tituloReserva}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {reserva.escala?.navio?.nome || "Navio"} • {reserva.escala?.porto || "Porto"}
+                      </p>
+                      {reserva.reserva_hotel_nome && (
+                        <p className="text-xs text-muted-foreground">Hotel: {reserva.reserva_hotel_nome}</p>
+                      )}
+                    </Link>
+                  )
+                })}
+              </div>
             ) : (
               <div className="divide-y rounded-lg border">
                 {dialogList.slice(0, 10).map((demanda) => (
-                  <div key={demanda.id} className="p-3">
+                  <Link key={demanda.id} href={`/demandas/${demanda.id}`} className="block p-3 hover:bg-accent/50 transition-colors rounded -mx-1">
                     <p className="font-medium">{demanda.titulo}</p>
                     <p className="text-xs text-muted-foreground">
                       {demanda.escala?.navio?.nome || "Navio"} • {demanda.escala?.porto || "Porto"}
@@ -350,7 +392,7 @@ export function DashboardClient({
                         Prazo: {new Date(demanda.prazo).toLocaleString("pt-BR")}
                       </p>
                     )}
-                  </div>
+                  </Link>
                 ))}
               </div>
             )}

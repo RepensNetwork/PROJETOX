@@ -5,8 +5,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { EscalaForm } from "@/components/escalas/escala-form"
+import { EscalaDemandasList } from "@/components/escalas/escala-demandas-list"
 import { DemandaForm } from "@/components/demandas/demanda-form"
 import { EscalaChat } from "@/components/chat/escala-chat"
 import { getEscalaWithDetails } from "@/app/actions/escalas"
@@ -15,21 +15,10 @@ import { getMembros } from "@/app/actions/dashboard"
 import { getMensagens } from "@/app/actions/mensagens"
 import { getCurrentUser } from "@/app/actions/auth"
 import { redirect } from "next/navigation"
-import { 
-  Ship, 
-  MapPin, 
-  Calendar,
-  ArrowLeft,
-  Pencil,
-  Clock,
-  User,
-  FileText,
-  AlertTriangle,
-  Plus
-} from "lucide-react"
+import { Ship, MapPin, Calendar, ArrowLeft, Pencil, FileText, Plus } from "lucide-react"
 import { format, formatDistanceToNow } from "date-fns"
 import { ptBR } from "date-fns/locale/pt-BR"
-import type { Demanda, Escala } from "@/lib/types/database"
+import type { Escala } from "@/lib/types/database"
 
 interface EscalaDetailPageProps {
   params: Promise<{ id: string }>
@@ -49,51 +38,20 @@ const statusLabels: Record<Escala["status"], string> = {
   cancelada: "Cancelada",
 }
 
-const demandaStatusColors: Record<Demanda["status"], string> = {
-  pendente: "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/30",
-  em_andamento: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30",
-  concluida: "bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/30",
-  aguardando_terceiro: "bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/30",
-  cancelada: "bg-gray-500/10 text-gray-600 dark:text-gray-400 border-gray-500/30",
-}
-
-const demandaStatusLabels: Record<Demanda["status"], string> = {
-  pendente: "Pendente",
-  em_andamento: "Em Andamento",
-  concluida: "Concluída",
-  aguardando_terceiro: "Aguardando Terceiro",
-  cancelada: "Cancelada",
-}
-
-const prioridadeColors: Record<Demanda["prioridade"], string> = {
-  baixa: "bg-gray-500/10 text-gray-600 dark:text-gray-400",
-  media: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
-  alta: "bg-orange-500/10 text-orange-600 dark:text-orange-400",
-  urgente: "bg-red-500/10 text-red-600 dark:text-red-400",
-}
-
-const prioridadeLabels: Record<Demanda["prioridade"], string> = {
-  baixa: "Baixa",
-  media: "Média",
-  alta: "Alta",
-  urgente: "Urgente",
-}
-
 export default async function EscalaDetailPage({ params }: EscalaDetailPageProps) {
   const { id } = await params
-  
-  // Verificar autenticação
-  const currentUser = await getCurrentUser()
-  if (!currentUser || !currentUser.membro) {
-    redirect("/login")
-  }
 
-  const [escala, navios, membros, mensagens] = await Promise.all([
+  const [currentUser, escala, navios, membros, mensagens] = await Promise.all([
+    getCurrentUser(),
     getEscalaWithDetails(id),
     getNavios(),
     getMembros(),
     getMensagens(id),
   ])
+
+  if (!currentUser || !currentUser.membro) {
+    redirect("/login")
+  }
 
   if (!escala) {
     notFound()
@@ -101,7 +59,6 @@ export default async function EscalaDetailPage({ params }: EscalaDetailPageProps
 
   const membroAtual = currentUser.membro
 
-  const now = new Date()
   const demandasPendentes = escala.demandas.filter(d => d.status === "pendente")
   const demandasEmAndamento = escala.demandas.filter(d => d.status === "em_andamento")
   const demandasConcluidas = escala.demandas.filter(d => d.status === "concluida")
@@ -277,87 +234,7 @@ export default async function EscalaDetailPage({ params }: EscalaDetailPageProps
                 </p>
               </div>
             ) : (
-              <div className="space-y-3">
-                {escala.demandas
-                  .sort((a, b) => {
-                    const priorityOrder: Record<Demanda["prioridade"], number> = { urgente: 0, alta: 1, media: 2, baixa: 3 }
-                    return (priorityOrder[a.prioridade] || 3) - (priorityOrder[b.prioridade] || 3)
-                  })
-                  .map((demanda) => {
-                    const isOverdue = demanda.prazo && 
-                      new Date(demanda.prazo) < now && 
-                      demanda.status !== "concluida"
-
-                    return (
-                      <Link 
-                        key={demanda.id} 
-                        href={`/demandas/${demanda.id}`}
-                        className="block"
-                      >
-                        <div className={`flex items-start gap-3 p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors ${
-                          isOverdue ? "border-destructive/50" : ""
-                        }`}>
-                          <div className="flex-1 min-w-0 space-y-1">
-                            <div className="flex items-start justify-between gap-2">
-                              <h4 className="font-medium text-sm leading-tight">
-                                {demanda.titulo}
-                              </h4>
-                              <Badge variant="outline" className={prioridadeColors[demanda.prioridade]}>
-                                {prioridadeLabels[demanda.prioridade]}
-                              </Badge>
-                            </div>
-
-                            {demanda.descricao && (
-                              <p className="text-xs text-muted-foreground line-clamp-2">
-                                {demanda.descricao}
-                              </p>
-                            )}
-
-                            <div className="flex items-center justify-between gap-2 pt-1">
-                              <Badge variant="outline" className={`text-xs ${demandaStatusColors[demanda.status]}`}>
-                                {demandaStatusLabels[demanda.status]}
-                              </Badge>
-
-                              <div className="flex items-center gap-3">
-                                {demanda.prazo && (
-                                  <span className={`flex items-center gap-1 text-xs ${
-                                    isOverdue ? "text-destructive font-medium" : "text-muted-foreground"
-                                  }`}>
-                                    {isOverdue && <AlertTriangle className="h-3 w-3" />}
-                                    <Clock className="h-3 w-3" />
-                                    {isOverdue 
-                                      ? "Atrasada" 
-                                      : format(new Date(demanda.prazo), "dd/MM HH:mm", { locale: ptBR })
-                                    }
-                                  </span>
-                                )}
-
-                                {demanda.responsavel ? (
-                                  <div className="flex items-center gap-1">
-                                    <Avatar className="h-5 w-5">
-                                      <AvatarImage src={demanda.responsavel.avatar_url || undefined} />
-                                      <AvatarFallback className="text-[10px]">
-                                        {demanda.responsavel.nome.split(" ").map(n => n[0]).join("").slice(0, 2)}
-                                      </AvatarFallback>
-                                    </Avatar>
-                                    <span className="text-xs text-muted-foreground">
-                                      {demanda.responsavel.nome.split(" ")[0]}
-                                    </span>
-                                  </div>
-                                ) : (
-                                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                                    <User className="h-3 w-3" />
-                                    Sem responsável
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </Link>
-                    )
-                  })}
-              </div>
+              <EscalaDemandasList demandas={escala.demandas} />
             )}
           </CardContent>
         </Card>

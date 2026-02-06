@@ -1,35 +1,26 @@
-import dynamic from "next/dynamic"
+import { Suspense } from "react"
 import { Header } from "@/components/layout/header"
-import { getTransportesDoDia } from "@/app/actions/transportes"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-
-const MotoristaClient = dynamic(
-  () => import("@/app/motorista/motorista-client").then((m) => m.MotoristaClient),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="animate-pulse rounded-lg border bg-card p-6 space-y-3">
-        <div className="h-4 w-1/3 rounded bg-muted" />
-        <div className="h-20 rounded bg-muted" />
-        <div className="h-20 rounded bg-muted" />
-      </div>
-    ),
-  }
-)
+import { getEscalasForSelect } from "@/app/actions/demandas"
+import { getMembros } from "@/app/actions/dashboard"
+import { MotoristaContent } from "./motorista-content"
+import { MotoristaDatePicker } from "./motorista-date-picker"
+import { MotoristaNovaDemanda } from "./motorista-nova-demanda"
 
 interface MotoristaPageProps {
   searchParams?: { date?: string; tipo?: string }
 }
 
-export default async function MotoristaPage({ searchParams }: MotoristaPageProps) {
-  const date = searchParams?.date
-  const tipo = searchParams?.tipo
-  /** Sem data na URL = puxar todos os transportes. */
-  const dateForFetch = date && date !== "all" && date.toLowerCase() !== "todos" ? date : "all"
-  const transportes = await getTransportesDoDia(dateForFetch, tipo)
+function MotoristaSkeleton() {
+  return <div className="animate-pulse rounded-xl border bg-card p-6 h-64 space-y-3"><div className="h-4 w-1/3 rounded bg-muted" /><div className="h-20 rounded bg-muted" /><div className="h-20 rounded bg-muted" /></div>
+}
 
+export default async function MotoristaPage({ searchParams }: MotoristaPageProps) {
+  const params = searchParams || {}
+  const date = params?.date
+  const tipo = params?.tipo
+  const dateForFetch = date && date !== "all" && date.toLowerCase() !== "todos" ? date : "all"
+  const defaultDate = date || "all"
   const today = new Date()
   const formatDate = (value: Date) => {
     const day = String(value.getDate()).padStart(2, "0")
@@ -41,8 +32,12 @@ export default async function MotoristaPage({ searchParams }: MotoristaPageProps
   const tomorrow = new Date(today)
   tomorrow.setDate(tomorrow.getDate() + 1)
   const tomorrowValue = formatDate(tomorrow)
-  const defaultDate = date || "all"
   const inputDateValue = date && date !== "all" && date.toLowerCase() !== "todos" ? date : ""
+
+  const [escalas, membros] = await Promise.all([
+    getEscalasForSelect(),
+    getMembros(),
+  ])
 
   return (
     <div className="min-h-screen bg-background">
@@ -53,21 +48,12 @@ export default async function MotoristaPage({ searchParams }: MotoristaPageProps
             <h1 className="text-2xl font-bold tracking-tight">Transportes do dia</h1>
             <p className="text-muted-foreground">Visão simples para o motorista confirmar as viagens</p>
           </div>
+          <MotoristaNovaDemanda escalas={escalas} membros={membros} />
         </div>
 
-        <form method="get" className="rounded-lg border bg-card p-4 space-y-3">
+        <form method="get" className="rounded-xl border bg-card p-4 space-y-3">
           <div className="flex flex-wrap items-end gap-3">
-            <div className="space-y-2">
-              <Label htmlFor="date">Data</Label>
-              <Input
-                id="date"
-                name="date"
-                type="text"
-                inputMode="numeric"
-                placeholder="dd/mm/aaaa (deixe vazio = todos)"
-                defaultValue={inputDateValue}
-              />
-            </div>
+            <MotoristaDatePicker defaultValue={inputDateValue} />
             <Button type="submit">Filtrar</Button>
             <Button type="button" variant="outline" asChild>
               <a href={`/motorista?date=${todayValue}`}>Hoje</a>
@@ -95,7 +81,9 @@ export default async function MotoristaPage({ searchParams }: MotoristaPageProps
           </div>
         </form>
 
-        <MotoristaClient transportes={transportes} dataFiltro={defaultDate} />
+        <Suspense fallback={<MotoristaSkeleton />}>
+          <MotoristaContent dateForFetch={dateForFetch} defaultDate={defaultDate} tipo={tipo} />
+        </Suspense>
       </main>
     </div>
   )

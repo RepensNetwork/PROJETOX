@@ -8,7 +8,7 @@ import { importEscalas } from "@/app/actions/import"
 
 export default async function EscalasPage() {
   const [escalas, navios] = await Promise.all([
-    getEscalas(),
+    getEscalas(600),
     getNavios(),
   ])
 

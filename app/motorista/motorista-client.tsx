@@ -92,12 +92,24 @@ export function MotoristaClient({ transportes, dataFiltro }: MotoristaClientProp
     return date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
   }
 
-  /** DD/MM para agrupar por data e não misturar dias (ex.: 31/01 vs 01/02). */
+  /** DD/MM para exibição. */
   const formatDateShort = (value?: string | null) => {
     if (!value) return ""
     const date = new Date(value)
     if (Number.isNaN(date.getTime())) return ""
     return date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })
+  }
+
+  /** DD/MM/YYYY para slot único por data (evitar misturar 31/01/2025 com 31/01/2026). */
+  const formatDateSlot = (value?: string | null) => {
+    if (!value) return ""
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return ""
+    return date.toLocaleDateString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    })
   }
 
   const parseDateTime = (value?: string) => {
@@ -145,15 +157,15 @@ export function MotoristaClient({ transportes, dataFiltro }: MotoristaClientProp
       }
     }
 
-    /** Agrupa por data + hora para não misturar 31/01 com 01/02 no mesmo bloco. */
+    /** Agrupa por data (DD/MM/YYYY) + hora para cada data ter suas próprias viagens. */
     const porHorario: Record<string, Entry[]> = {}
     for (const entry of entries) {
       const leg = entry.leg
       let slot: string
       if (leg.pickup_at) {
-        const d = formatDateShort(leg.pickup_at)
+        const d = formatDateSlot(leg.pickup_at)
         const t = formatTime(leg.pickup_at)
-        slot = d && t ? `${d} ${t}` : t || "A definir"
+        slot = d && t ? `${d} ${t}` : d ? `${d} — horário a definir` : "A definir"
       } else {
         slot = "A definir"
       }
@@ -283,14 +295,30 @@ export function MotoristaClient({ transportes, dataFiltro }: MotoristaClientProp
   }
 
   const concludedForReport = legsNoDia.filter((e) => e.leg.status === "concluido")
-  const groupedReport = useMemo(() => {
-    const acc: Record<string, typeof concludedForReport> = {}
+  /** Agrupa por data primeiro, depois por Nº viagem (grupo), para cada data ter suas viagens. */
+  const groupedReportByDate = useMemo(() => {
+    type Entry = (typeof concludedForReport)[number]
+    const byDate: Record<string, Record<string, Entry[]>> = {}
     for (const entry of concludedForReport) {
-      const key = entry.leg.grupo?.trim() || "Sem grupo"
-      if (!acc[key]) acc[key] = []
-      acc[key].push(entry)
+      const leg = entry.leg
+      const dataKey = leg.pickup_at
+        ? formatDateSlot(leg.pickup_at)
+        : "Sem data"
+      const grupo = leg.grupo?.trim() || "Sem grupo"
+      if (!byDate[dataKey]) byDate[dataKey] = {}
+      if (!byDate[dataKey][grupo]) byDate[dataKey][grupo] = []
+      byDate[dataKey][grupo].push(entry)
     }
-    return acc
+    const datasOrdenadas = Object.keys(byDate).sort((a, b) => {
+      if (a === "Sem data") return 1
+      if (b === "Sem data") return -1
+      const [da, ma, ya] = a.split("/").map(Number)
+      const [db, mb, yb] = b.split("/").map(Number)
+      const dateA = new Date(ya!, ma! - 1, da!).getTime()
+      const dateB = new Date(yb!, mb! - 1, db!).getTime()
+      return dateA - dateB
+    })
+    return datasOrdenadas.map((dataKey) => ({ dataKey, grupos: byDate[dataKey]! }))
   }, [concludedForReport])
 
   const handleGerarPDF = async () => {
@@ -576,29 +604,38 @@ export function MotoristaClient({ transportes, dataFiltro }: MotoristaClientProp
         <div className="rounded-xl border bg-card p-4">
           <h3 className="font-semibold mb-2">Relatório por viagem (concluídos)</h3>
           <p className="text-sm text-muted-foreground mb-3">
-            Tripulantes agrupados pelo <strong>Nº viagem</strong> informado na confirmação.
+            Tripulantes agrupados por <strong>data</strong> e pelo <strong>Nº viagem</strong> informado na confirmação. Cada data tem suas próprias viagens.
           </p>
-          <div className="space-y-2">
-            {Object.entries(groupedReport).map(([grupo, items]) => (
-              <div key={grupo} className="rounded-md border p-3 text-sm">
-                <p className="font-medium text-muted-foreground mb-1.5">
-                  Nº viagem: {grupo}
+          <div className="space-y-4">
+            {groupedReportByDate.map(({ dataKey, grupos }) => (
+              <div key={dataKey} className="space-y-2">
+                <p className="text-sm font-semibold text-primary border-b pb-1">
+                  Data: {dataKey}
                 </p>
-                <ul className="space-y-1">
-                  {items.map(({ demanda, leg }) => (
-                    <li key={leg.id} className="text-foreground flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                      <Link
-                        href={`/demandas/${demanda.id}`}
-                        className="text-primary hover:underline"
-                      >
-                        {demanda.titulo}
-                      </Link>
-                      <span className="text-muted-foreground">
-                        {leg.pickup_local || "—"} → {leg.dropoff_local || "—"}
-                      </span>
-                    </li>
+                <div className="space-y-2 pl-2">
+                  {Object.entries(grupos).map(([grupo, items]) => (
+                    <div key={`${dataKey}-${grupo}`} className="rounded-md border p-3 text-sm">
+                      <p className="font-medium text-muted-foreground mb-1.5">
+                        Nº viagem: {grupo}
+                      </p>
+                      <ul className="space-y-1">
+                        {items.map(({ demanda, leg }) => (
+                          <li key={leg.id} className="text-foreground flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                            <Link
+                              href={`/demandas/${demanda.id}`}
+                              className="text-primary hover:underline"
+                            >
+                              {demanda.titulo}
+                            </Link>
+                            <span className="text-muted-foreground">
+                              {leg.pickup_local || "—"} → {leg.dropoff_local || "—"}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
                   ))}
-                </ul>
+                </div>
               </div>
             ))}
           </div>

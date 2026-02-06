@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server"
 import type { Demanda } from "@/lib/types/database"
 import type { ReservaItem, UpdateReservaHotelInput } from "@/lib/reservas"
 import { revalidatePath } from "next/cache"
+import { syncDespesaReservaHotel } from "@/app/actions/financeiro"
 
 export type FiltroReservas = {
   dataInicio?: string // YYYY-MM-DD
@@ -11,10 +12,10 @@ export type FiltroReservas = {
 }
 
 /** Lista todas as reservas: demandas tipo reserva_hotel e demandas de tripulante com reserva vinculada. */
-export async function getReservasHotel(filtro?: FiltroReservas): Promise<ReservaItem[]> {
+export async function getReservasHotel(filtro?: FiltroReservas, limit?: number): Promise<ReservaItem[]> {
   const supabase = await createClient()
 
-  const { data, error } = await supabase
+  let q = supabase
     .from("demandas")
     .select(`
       *,
@@ -23,6 +24,8 @@ export async function getReservasHotel(filtro?: FiltroReservas): Promise<Reserva
     .or("reserva_checkin.not.is.null,reserva_hotel_nome.not.is.null")
     .order("reserva_checkin", { ascending: true, nullsFirst: false })
     .order("created_at", { ascending: false })
+  if (limit != null && limit > 0) q = q.limit(limit)
+  const { data, error } = await q
 
   if (error) {
     console.error("Error fetching reservas hotel:", error)
@@ -84,6 +87,8 @@ export async function updateReservaHotel(
     console.error("Error updating reserva hotel:", error)
     return { success: false, error: error.message }
   }
+
+  await syncDespesaReservaHotel(demandaId)
 
   revalidatePath("/reservas")
   revalidatePath("/demandas")

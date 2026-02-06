@@ -20,19 +20,19 @@ interface AdminUsuarioDetailPageProps {
 
 export default async function AdminUsuarioDetailPage({ params }: AdminUsuarioDetailPageProps) {
   const { id } = await params
-  
-  // Verificar autenticação e permissões de admin
-  const currentUser = await getCurrentUser()
-  
+
+  const [currentUser, membros] = await Promise.all([
+    getCurrentUser(),
+    getMembros(),
+  ])
+
   if (!currentUser || !currentUser.membro) {
     redirect("/login")
   }
-
   if (!currentUser.membro.is_admin) {
     notFound()
   }
 
-  const membros = await getMembros()
   const membro = membros.find(m => m.id === id)
 
   if (!membro) {

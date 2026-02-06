@@ -53,10 +53,22 @@ const config: Config = {
           foreground: 'var(--success-foreground)',
         },
       },
+      ringOffset: {
+        background: 'var(--background)',
+      },
       borderRadius: {
-        lg: 'var(--radius)',
-        md: 'calc(var(--radius) - 2px)',
-        sm: 'calc(var(--radius) - 4px)',
+        lg: 'var(--radius-lg)',
+        DEFAULT: 'var(--radius)',
+        md: 'var(--radius)',
+        sm: 'var(--radius-sm)',
+        xl: 'var(--radius-xl)',
+      },
+      boxShadow: {
+        'elevation-1': 'var(--shadow-sm)',
+        'elevation-2': 'var(--shadow)',
+        'elevation-3': 'var(--shadow-md)',
+        'elevation-4': 'var(--shadow-lg)',
+        'elevation-5': 'var(--shadow-xl)',
       },
       keyframes: {
         'accordion-down': {

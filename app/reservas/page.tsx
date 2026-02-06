@@ -1,17 +1,22 @@
+import { Suspense } from "react"
 import { Header } from "@/components/layout/header"
-import { getReservasHotel } from "@/app/actions/reservas"
-import { ReservasClient } from "./reservas-client"
+import { ReservasContent } from "./reservas-content"
 
 interface ReservasPageProps {
   searchParams: Promise<{ dataInicio?: string; dataFim?: string }>
 }
 
+function ReservasSkeleton() {
+  return (
+    <div className="rounded-xl border bg-card p-6 animate-pulse space-y-4">
+      <div className="h-10 w-full rounded-lg bg-muted" />
+      <div className="h-64 rounded-lg bg-muted" />
+    </div>
+  )
+}
+
 export default async function ReservasPage({ searchParams }: ReservasPageProps) {
   const params = await searchParams
-  const reservas = await getReservasHotel({
-    dataInicio: params.dataInicio,
-    dataFim: params.dataFim,
-  })
 
   return (
     <div className="min-h-screen bg-background">
@@ -24,10 +29,9 @@ export default async function ReservasPage({ searchParams }: ReservasPageProps) 
           </p>
         </div>
 
-        <ReservasClient
-          reservas={reservas}
-          filtroInicial={{ dataInicio: params.dataInicio, dataFim: params.dataFim }}
-        />
+        <Suspense fallback={<ReservasSkeleton />}>
+          <ReservasContent dataInicio={params.dataInicio} dataFim={params.dataFim} />
+        </Suspense>
       </main>
     </div>
   )
