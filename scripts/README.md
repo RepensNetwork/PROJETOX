@@ -20,7 +20,10 @@ Script para criar todas as tabelas, tipos ENUM, índices e políticas RLS do sis
 ### 3. `016_create_alertas.sql`
 **Necessário para alertas de novas demandas e transportes.** Cria a tabela `alertas` (nova demanda / novo transporte). Execute no Supabase (SQL Editor) para que novas demandas e transportes apareçam no sino e no dashboard como alerta.
 
-### 4. `002_seed_data.sql`
+### 4. `021_financeiro_tables.sql`
+**Módulo Financeiro.** Cria tabelas: `financeiro_categorias`, `financeiro_contas`, `financeiro_lancamentos`, `financeiro_comissoes`, índices, RLS e seed de categorias/contas iniciais. Execute no SQL Editor do Supabase para usar a área Financeiro do sistema.
+
+### 5. `002_seed_data.sql`
 Script para popular o banco de dados com dados de exemplo.
 
 **Conteúdo:**
@@ -40,7 +43,9 @@ Script para popular o banco de dados com dados de exemplo.
 4. Execute os scripts na ordem:
    - Primeiro: `001_create_tables.sql`
    - Depois: `002_seed_data.sql`
-   - Para notificações de demanda (atribuição de responsável): `015_create_notificacoes_demanda.sql`
+   - Para notificações de demanda: `015_create_notificacoes_demanda.sql`
+   - Para alertas (sino/dashboard): `016_create_alertas.sql`
+   - Para módulo Financeiro: `021_financeiro_tables.sql`
 
 ### Via CLI do Supabase
 
