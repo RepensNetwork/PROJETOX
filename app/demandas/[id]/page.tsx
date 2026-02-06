@@ -10,7 +10,7 @@ import { DemandaForm } from "@/components/demandas/demanda-form"
 import { StatusChanger } from "@/components/demandas/status-changer"
 import { AssignResponsavel } from "@/components/demandas/assign-responsavel"
 import { getDemandaWithDetails, getEscalasForSelect } from "@/app/actions/demandas"
-import { getMembros } from "@/app/actions/dashboard"
+import { getMembrosUncached } from "@/app/actions/dashboard"
 import { DemandaTransporteBlock } from "@/components/demandas/demanda-transporte-block"
 import { DemandaReservaBlock } from "@/components/demandas/demanda-reserva-block"
 import { 
@@ -76,7 +76,7 @@ export default async function DemandaDetailPage({ params }: DemandaDetailPagePro
   const [demanda, escalas, membros] = await Promise.all([
     getDemandaWithDetails(id),
     getEscalasForSelect(),
-    getMembros(),
+    getMembrosUncached(),
   ])
 
   if (!demanda) {

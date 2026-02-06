@@ -176,6 +176,11 @@ export async function getMembros(): Promise<Membro[]> {
   })()
 }
 
+/** Lista membros sem cache; use em páginas que precisam da lista sempre atual e com a sessão atual (ex.: atribuir responsável). */
+export async function getMembrosUncached(): Promise<Membro[]> {
+  return fetchMembros()
+}
+
 export async function updateDemandaStatus(
   demandaId: string, 
   status: Demanda["status"]

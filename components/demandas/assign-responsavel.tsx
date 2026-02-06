@@ -95,13 +95,18 @@ export function AssignResponsavel({
           <SelectTrigger id="responsavel-select" className="mt-1">
             <SelectValue placeholder="Selecione o responsável" />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className="max-h-[min(20rem,70vh)]">
             <SelectItem value="none">Nenhum</SelectItem>
             {membros.map((m) => (
               <SelectItem key={m.id} value={m.id}>
                 {m.nome}
               </SelectItem>
             ))}
+            {membros.length === 0 && (
+              <div className="py-2 px-2 text-xs text-muted-foreground">
+                Nenhum membro na lista. Cadastre em Equipe / Membros.
+              </div>
+            )}
           </SelectContent>
         </Select>
         {loading && <p className="text-xs text-muted-foreground mt-1">Salvando...</p>}
