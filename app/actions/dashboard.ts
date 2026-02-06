@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { unstable_cache } from "next/cache"
 import type { 
   DashboardStats, 
   Escala, 
@@ -8,6 +9,11 @@ import type {
   Membro,
   Navio 
 } from "@/lib/types/database"
+import { getDemandasForDashboard, getDemandasByResponsavel } from "@/app/actions/demandas"
+import { getNavios } from "@/app/actions/navios"
+import { getAlertas } from "@/app/actions/alertas"
+import { getReservasHotel } from "@/app/actions/reservas"
+import { getCurrentUser } from "@/app/actions/auth"
 
 export async function getDashboardStats(): Promise<DashboardStats> {
   const supabase = await createClient()
@@ -150,20 +156,24 @@ export async function getUrgentDemandas(): Promise<(Demanda & { escala: Escala &
   return demandas || []
 }
 
-export async function getMembros(): Promise<Membro[]> {
+async function fetchMembros(): Promise<Membro[]> {
   const supabase = await createClient()
-
   const { data: membros, error } = await supabase
     .from("membros")
     .select("*")
     .order("nome", { ascending: true })
-
   if (error) {
     console.error("Error fetching membros:", error)
     return []
   }
-
   return membros || []
+}
+
+export async function getMembros(): Promise<Membro[]> {
+  return unstable_cache(fetchMembros, ["membros-list"], {
+    revalidate: 60,
+    tags: ["membros"],
+  })()
 }
 
 export async function updateDemandaStatus(
@@ -183,4 +193,120 @@ export async function updateDemandaStatus(
   }
 
   return { success: true }
+}
+
+// ——— Cache único: tudo em ~200ms quando cache quente ———
+const CACHE_DASH = 30
+export const getCachedStats = unstable_cache(getDashboardStats, ["dashboard-stats"], {
+  revalidate: CACHE_DASH,
+  tags: ["dashboard"],
+})
+export const getCachedUpcomingEscalas = unstable_cache(getUpcomingEscalas, ["dashboard-escalas"], {
+  revalidate: CACHE_DASH,
+  tags: ["dashboard"],
+})
+export const getCachedNavios = unstable_cache(getNavios, ["dashboard-navios"], {
+  revalidate: 60,
+  tags: ["dashboard"],
+})
+export const getCachedMembros = getMembros
+export const getCachedDemandasForDashboard = unstable_cache(
+  () => getDemandasForDashboard(500),
+  ["dashboard-demandas"],
+  { revalidate: CACHE_DASH, tags: ["dashboard"] }
+)
+export const getCachedRecentDemandas = unstable_cache(getRecentDemandas, ["dashboard-recent-demandas"], {
+  revalidate: CACHE_DASH,
+  tags: ["dashboard"],
+})
+export const getCachedUrgentDemandas = unstable_cache(getUrgentDemandas, ["dashboard-urgent-demandas"], {
+  revalidate: CACHE_DASH,
+  tags: ["dashboard"],
+})
+export const getCachedAlertas = unstable_cache(() => getAlertas(5), ["dashboard-alertas"], {
+  revalidate: CACHE_DASH,
+  tags: ["dashboard"],
+})
+export const getCachedReservasHotel = unstable_cache(
+  () => getReservasHotel(undefined, 50),
+  ["dashboard-reservas"],
+  { revalidate: CACHE_DASH, tags: ["dashboard"] }
+)
+
+export async function getCachedDemandasByResponsavel(membroId: string) {
+  if (!membroId || membroId.trim() === "") return []
+  return unstable_cache(
+    () => getDemandasByResponsavel(membroId),
+    ["dashboard-my-demandas", membroId],
+    { revalidate: CACHE_DASH, tags: ["dashboard"] }
+  )()
+}
+
+/** Primeiro bloco: stats + escalas + navios + demandas (cache) + currentUser. Rápido quando cache quente. */
+export async function getDashboardDataFirst(): Promise<{
+  stats: DashboardStats
+  escalas: (Escala & { navio: Navio; demandas?: Pick<Demanda, "id" | "titulo" | "status">[] })[]
+  allDemandas: (Demanda & { escala: Escala & { navio: Navio }; responsavel: Membro | null })[]
+  navios: Navio[]
+  membroId: string
+}> {
+  const [stats, escalas, navios, allDemandas, currentUser] = await Promise.all([
+    getCachedStats().catch(() => ({
+      totalEscalasAtivas: 0,
+      totalDemandas: 0,
+      demandasPendentes: 0,
+      demandasEmAndamento: 0,
+      demandasConcluidas: 0,
+      demandasBloqueadas: 0,
+      demandasAtrasadas: 0,
+      demandasCriticas: 0,
+    })),
+    getCachedUpcomingEscalas().catch(() => []),
+    getCachedNavios().catch(() => []),
+    getCachedDemandasForDashboard().catch(() => []),
+    getCurrentUser(),
+  ])
+  return {
+    stats: stats ?? {
+      totalEscalasAtivas: 0,
+      totalDemandas: 0,
+      demandasPendentes: 0,
+      demandasEmAndamento: 0,
+      demandasConcluidas: 0,
+      demandasBloqueadas: 0,
+      demandasAtrasadas: 0,
+      demandasCriticas: 0,
+    },
+    escalas: escalas ?? [],
+    allDemandas: allDemandas ?? [],
+    navios: navios ?? [],
+    membroId: currentUser?.membro?.id ?? "",
+  }
+}
+
+/** Segundo bloco: alertas, reservas, demandas recentes/urgentes/minhas. Carrega após o primeiro. */
+export async function getDashboardDataRest(membroId: string): Promise<{
+  recentDemandas: (Demanda & { escala: Escala & { navio: Navio }; responsavel: Membro | null })[]
+  urgentDemandas: (Demanda & { escala: Escala & { navio: Navio }; responsavel: Membro | null })[]
+  membros: Membro[]
+  alertas: Awaited<ReturnType<typeof getAlertas>>
+  reservasHotel: Awaited<ReturnType<typeof getReservasHotel>>
+  myDemandas: (Demanda & { escala: Escala & { navio: Navio }; responsavel: Membro | null })[]
+}> {
+  const [recentDemandas, urgentDemandas, membros, alertas, reservasHotel, myDemandas] = await Promise.all([
+    getRecentDemandas(),
+    getUrgentDemandas(),
+    getMembros(),
+    getAlertas(5),
+    getReservasHotel(undefined, 50),
+    membroId ? getDemandasByResponsavel(membroId) : Promise.resolve([]),
+  ])
+  return {
+    recentDemandas: recentDemandas ?? [],
+    urgentDemandas: urgentDemandas ?? [],
+    membros: membros ?? [],
+    alertas: alertas ?? [],
+    reservasHotel: reservasHotel ?? [],
+    myDemandas: myDemandas ?? [],
+  }
 }

@@ -1,6 +1,8 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
+import { useRouter } from "next/navigation"
+import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -14,6 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import type { Escala, Navio } from "@/lib/types/database"
+import { Car, Building2 } from "lucide-react"
 
 type TaskResponse = {
   task?: unknown
@@ -41,6 +44,7 @@ type Mode = "text" | "audio"
 
 interface IntakeClientProps {
   escalas: (Escala & { navio: Navio })[]
+  tipoInicial?: string
 }
 
 const tipoOptions = [
@@ -91,7 +95,13 @@ const prioridadeOptions = [
   { value: "urgente", label: "Urgente" },
 ]
 
-export function IntakeClient({ escalas }: IntakeClientProps) {
+const tipoDefault = (tipoInicial?: string) =>
+  tipoInicial && tipoOptions.some((o) => o.value === tipoInicial) ? tipoInicial : "outro"
+
+const TIPOS_TRANSPORTE_HOTEL = ["embarque_passageiros", "desembarque_passageiros"]
+
+export function IntakeClient({ escalas, tipoInicial }: IntakeClientProps) {
+  const router = useRouter()
   const [mode, setMode] = useState<Mode>("text")
   const [text, setText] = useState("")
   const [taskJson, setTaskJson] = useState<string>("")
@@ -102,7 +112,7 @@ export function IntakeClient({ escalas }: IntakeClientProps) {
   const [saving, setSaving] = useState(false)
   const [navioId, setNavioId] = useState("")
   const [escalaId, setEscalaId] = useState("")
-  const [tipo, setTipo] = useState("outro")
+  const [tipo, setTipo] = useState(() => tipoDefault(tipoInicial))
   const [categoria, setCategoria] = useState("processos_internos")
   const [prioridade, setPrioridade] = useState("media")
   const [isRecording, setIsRecording] = useState(false)
@@ -314,7 +324,11 @@ export function IntakeClient({ escalas }: IntakeClientProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       })
-      const { data, rawText } = await parseJsonResponse<{ success?: boolean; error?: string }>(response)
+      const { data, rawText } = await parseJsonResponse<{
+        success?: boolean
+        error?: string
+        demanda?: { id: string }
+      }>(response)
 
       if (!response.ok || !data?.success) {
         setSaveError(
@@ -323,6 +337,14 @@ export function IntakeClient({ escalas }: IntakeClientProps) {
               rawText ? rawText.slice(0, 200) : "Resposta inválida."
             }`
         )
+        return
+      }
+
+      const demandaId = data?.demanda?.id
+      const isEmbarqueDesembarque = TIPOS_TRANSPORTE_HOTEL.includes(tipo)
+
+      if (isEmbarqueDesembarque && demandaId) {
+        router.push(`/demandas/${demandaId}`)
         return
       }
 
@@ -697,6 +719,31 @@ export function IntakeClient({ escalas }: IntakeClientProps) {
                 </SelectContent>
               </Select>
             </div>
+
+            {TIPOS_TRANSPORTE_HOTEL.includes(tipo) && (
+              <Card className="border-primary/30 bg-primary/5">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">Transporte e Hotel</CardTitle>
+                  <CardDescription>
+                    Para demandas de embarque ou desembarque, após salvar você será redirecionado à página da demanda para configurar transporte terrestre e reserva de hotel.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="flex flex-wrap gap-2 pt-0">
+                  <Button asChild variant="outline" size="sm" className="gap-2">
+                    <Link href="/motorista">
+                      <Car className="h-4 w-4" />
+                      Transportes (Motorista)
+                    </Link>
+                  </Button>
+                  <Button asChild variant="outline" size="sm" className="gap-2">
+                    <Link href="/reservas">
+                      <Building2 className="h-4 w-4" />
+                      Reservas de hotel
+                    </Link>
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
 
             <Button type="button" onClick={handleSave} disabled={saving || !taskJson || !navioId || !escalaId}>
               {saving ? "Salvando..." : "Salvar tarefa"}

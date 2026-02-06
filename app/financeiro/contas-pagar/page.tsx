@@ -1,22 +1,21 @@
 import { Header } from "@/components/layout/header"
 import { FinanceiroNav } from "@/components/financeiro/financeiro-nav"
 import {
-  getLancamentos,
-  getCategoriasAll,
-  getContasAll,
-  getEscalasParaFinanceiro,
+  getCachedLancamentos,
+  getCachedCategoriasAll,
+  getCachedContasAll,
+  getCachedEscalasParaFinanceiro,
   syncAllReservasToFinanceiro,
 } from "@/app/actions/financeiro"
 import { ContasPagarClient } from "./contas-pagar-client"
 
 export default async function ContasPagarPage() {
-  await syncAllReservasToFinanceiro()
-
+  syncAllReservasToFinanceiro().catch(() => {})
   const [todosDespesa, categorias, contas, escalas] = await Promise.all([
-    getLancamentos({ tipo: "despesa" }),
-    getCategoriasAll(),
-    getContasAll(),
-    getEscalasParaFinanceiro(),
+    getCachedLancamentos({ tipo: "despesa", limit: 500 }),
+    getCachedCategoriasAll(),
+    getCachedContasAll(),
+    getCachedEscalasParaFinanceiro(),
   ])
 
   const aPagar = todosDespesa.filter(

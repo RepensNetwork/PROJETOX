@@ -1,12 +1,12 @@
 import { Header } from "@/components/layout/header"
 import { DemandasTable } from "@/components/demandas/demandas-table"
 import { DemandasPageActions } from "@/app/demandas/demandas-page-actions"
-import { getDemandasForList, getEscalasForSelect } from "@/app/actions/demandas"
+import { getDemandasForDashboard, getEscalasForSelect } from "@/app/actions/demandas"
 import { getMembros } from "@/app/actions/dashboard"
 
 export default async function DemandasPage() {
   const [demandas, escalas, membros] = await Promise.all([
-    getDemandasForList(800),
+    getDemandasForDashboard(800),
     getEscalasForSelect(),
     getMembros(),
   ])

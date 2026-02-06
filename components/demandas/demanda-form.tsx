@@ -27,6 +27,7 @@ import {
 import { Plus, Loader2, Trash2, Hotel } from "lucide-react"
 import { DateTimePickerPopover } from "@/components/ui/datetime-picker-popover"
 import { createDemanda, updateDemanda } from "@/app/actions/demandas"
+import { getMembros } from "@/app/actions/dashboard"
 import { EscalaSelectWithCalendar } from "@/components/demandas/escala-select-with-calendar"
 import { buildTransportLegs } from "@/lib/transportes"
 import type { Demanda, Escala, Navio, Membro } from "@/lib/types/database"
@@ -151,6 +152,17 @@ export function DemandaForm({
   const open = isControlled ? openProp : internalOpen
   const setOpen = isControlled ? (onOpenChangeProp ?? (() => {})) : setInternalOpen
   const [loading, setLoading] = useState(false)
+  const [membrosList, setMembrosList] = useState<Membro[]>(membros)
+
+  React.useEffect(() => {
+    setMembrosList(membros)
+  }, [membros])
+
+  React.useEffect(() => {
+    if (open && membrosList.length === 0) {
+      getMembros().then((list) => list?.length ? setMembrosList(list) : null)
+    }
+  }, [open, membrosList.length])
   const getIsoOrEmpty = (value: string | null | undefined): string => {
     if (!value) return ""
     try {
@@ -712,7 +724,7 @@ export function DemandaForm({
             <div className="space-y-2">
               <Label htmlFor="responsavel_id">Responsável</Label>
               <Select
-                value={formData.responsavel_id}
+                value={formData.responsavel_id || "none"}
                 onValueChange={(value) => setFormData({ ...formData, responsavel_id: value === "none" ? "" : value })}
               >
                 <SelectTrigger id="responsavel_id">
@@ -720,7 +732,7 @@ export function DemandaForm({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Sem responsável</SelectItem>
-                  {membros.map((membro) => (
+                  {membrosList.map((membro) => (
                     <SelectItem key={membro.id} value={membro.id}>
                       {membro.nome}
                     </SelectItem>

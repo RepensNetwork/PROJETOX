@@ -7,6 +7,9 @@ import { MotoristaContent } from "./motorista-content"
 import { MotoristaDatePicker } from "./motorista-date-picker"
 import { MotoristaNovaDemanda } from "./motorista-nova-demanda"
 
+export const dynamic = "force-dynamic"
+export const revalidate = 0
+
 interface MotoristaPageProps {
   searchParams?: { date?: string; tipo?: string }
 }

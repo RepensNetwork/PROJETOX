@@ -11,7 +11,10 @@ function IntakeSkeleton() {
   )
 }
 
-export default function IntakePage() {
+type Props = { searchParams: Promise<{ tipo?: string }> }
+
+export default async function IntakePage({ searchParams }: Props) {
+  const { tipo: tipoParam } = await searchParams
   return (
     <div className="min-h-screen bg-background">
       <Header />
@@ -23,7 +26,7 @@ export default function IntakePage() {
           </p>
         </div>
         <Suspense fallback={<IntakeSkeleton />}>
-          <IntakeContent />
+          <IntakeContent tipoInicial={tipoParam ?? undefined} />
         </Suspense>
       </main>
     </div>

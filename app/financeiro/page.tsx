@@ -1,26 +1,16 @@
+import { Suspense } from "react"
 import { Header } from "@/components/layout/header"
 import { FinanceiroNav } from "@/components/financeiro/financeiro-nav"
-import { FinanceiroResumoCards } from "@/components/financeiro/financeiro-resumo-cards"
-import { getFinanceiroResumo, getLancamentos, getComissoes, syncAllReservasToFinanceiro } from "@/app/actions/financeiro"
-import Link from "next/link"
-import { Button } from "@/components/ui/button"
-import { Plus } from "lucide-react"
-import { LancamentosTable } from "@/components/financeiro/lancamentos-table"
-import { ComissoesTable } from "@/components/financeiro/comissoes-table"
+import { syncAllReservasToFinanceiro } from "@/app/actions/financeiro"
+import { FinanceiroContent } from "./financeiro-content"
 
-export default async function FinanceiroPage() {
-  await syncAllReservasToFinanceiro()
-
-  const [resumo, ultimosLancamentos, ultimasComissoes] = await Promise.all([
-    getFinanceiroResumo(),
-    getLancamentos({ limit: 8 }),
-    getComissoes({ limit: 5 }),
-  ])
+export default function FinanceiroPage() {
+  syncAllReservasToFinanceiro().catch(() => {})
 
   return (
     <div className="min-h-screen bg-background">
       <Header />
-      <main className="container py-6 space-y-6">
+      <main className="container max-w-[1600px] py-6 space-y-6">
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Financeiro</h1>
@@ -32,28 +22,21 @@ export default async function FinanceiroPage() {
 
         <FinanceiroNav />
 
-        <FinanceiroResumoCards resumo={resumo} />
-
-        <div className="grid gap-6 lg:grid-cols-2">
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold">Últimos lançamentos</h2>
-              <Button asChild variant="outline" size="sm">
-                <Link href="/financeiro/movimentacoes">Ver todos</Link>
-              </Button>
+        <Suspense
+          fallback={
+            <div className="space-y-6 animate-pulse">
+              <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+                {[1, 2, 3, 4].map((i) => (
+                  <div key={i} className="h-24 rounded-xl bg-muted" />
+                ))}
+              </div>
+              <div className="h-48 rounded-xl bg-muted" />
+              <div className="h-64 rounded-xl bg-muted" />
             </div>
-            <LancamentosTable lancamentos={ultimosLancamentos} showEscala />
-          </div>
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold">Comissões recentes</h2>
-              <Button asChild variant="outline" size="sm">
-                <Link href="/financeiro/comissoes">Ver todas</Link>
-              </Button>
-            </div>
-            <ComissoesTable comissoes={ultimasComissoes} />
-          </div>
-        </div>
+          }
+        >
+          <FinanceiroContent />
+        </Suspense>
       </main>
     </div>
   )

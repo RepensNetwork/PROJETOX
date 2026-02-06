@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
+import { format } from "date-fns"
+import { ptBR } from "date-fns/locale"
 import {
   Dialog,
   DialogContent,
@@ -133,7 +135,7 @@ export function ComissaoFormDialog({
               <SelectContent>
                 {escalas.map((e) => (
                   <SelectItem key={e.id} value={e.id}>
-                    {e.navio?.nome ?? "Navio"} • {e.porto} • {e.data_chegada?.slice(0, 10)}
+                    {e.navio?.nome ?? "Navio"} • {e.porto} • {e.data_chegada ? format(new Date(e.data_chegada), "dd/MM/yyyy", { locale: ptBR }) : "—"}
                   </SelectItem>
                 ))}
               </SelectContent>

@@ -42,9 +42,11 @@ import {
   Ship, 
   Clock,
   AlertTriangle,
-  User
+  User,
+  Loader2,
+  ChevronDown
 } from "lucide-react"
-import { deleteDemanda } from "@/app/actions/demandas"
+import { deleteDemanda, updateDemanda } from "@/app/actions/demandas"
 import { DemandaForm } from "./demanda-form"
 import type { Demanda, Escala, Navio, Membro } from "@/lib/types/database"
 import { format } from "date-fns"
@@ -86,11 +88,21 @@ const prioridadeLabels: Record<Demanda["prioridade"], string> = {
   urgente: "Urgente",
 }
 
+const statusOptions: { value: Demanda["status"]; label: string }[] = [
+  { value: "pendente", label: "Pendente" },
+  { value: "em_andamento", label: "Em Andamento" },
+  { value: "concluida", label: "Concluída" },
+  { value: "aguardando_terceiro", label: "Aguardando Terceiro" },
+  { value: "cancelada", label: "Cancelada" },
+]
+
 export function DemandasTable({ demandas, escalas, membros }: DemandasTableProps) {
   const router = useRouter()
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [showConcluidas, setShowConcluidas] = useState(false)
+  const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null)
+  const [localStatus, setLocalStatus] = useState<Record<string, Demanda["status"]>>({})
 
   const filteredDemandas = showConcluidas
     ? demandas
@@ -108,6 +120,17 @@ export function DemandasTable({ demandas, escalas, membros }: DemandasTableProps
     } finally {
       setDeleting(false)
       setDeleteId(null)
+    }
+  }
+
+  const handleStatusChange = async (demandaId: string, newStatus: Demanda["status"]) => {
+    setUpdatingStatusId(demandaId)
+    setLocalStatus((prev) => ({ ...prev, [demandaId]: newStatus }))
+    try {
+      await updateDemanda(demandaId, { status: newStatus })
+      router.refresh()
+    } finally {
+      setUpdatingStatusId(null)
     }
   }
 
@@ -182,9 +205,11 @@ export function DemandasTable({ demandas, escalas, membros }: DemandasTableProps
           </TableHeader>
           <TableBody>
             {filteredDemandas.map((demanda) => {
+              const displayStatus = localStatus[demanda.id] ?? demanda.status
               const isOverdue = demanda.prazo && 
                 new Date(demanda.prazo) < now && 
-                demanda.status !== "concluida"
+                displayStatus !== "concluida"
+              const isUpdatingStatus = updatingStatusId === demanda.id
 
               return (
                 <TableRow key={demanda.id} className={isOverdue ? "bg-destructive/5" : ""}>
@@ -198,18 +223,52 @@ export function DemandasTable({ demandas, escalas, membros }: DemandasTableProps
                     </Link>
                   </TableCell>
                   <TableCell>
-                    <Link 
-                      href={`/escalas/${demanda.escala_id}`}
-                      className="flex items-center gap-1 text-sm hover:underline"
-                    >
-                      <Ship className="h-3.5 w-3.5 text-muted-foreground" />
-                      {demanda.escala.navio.nome} - {demanda.escala.porto}
-                    </Link>
+                    {demanda.escala?.navio ? (
+                      <Link 
+                        href={`/escalas/${demanda.escala_id}`}
+                        className="flex items-center gap-1 text-sm hover:underline"
+                      >
+                        <Ship className="h-3.5 w-3.5 text-muted-foreground" />
+                        {demanda.escala.navio.nome} - {demanda.escala.porto}
+                      </Link>
+                    ) : (
+                      <span className="flex items-center gap-1 text-sm text-muted-foreground">
+                        <Ship className="h-3.5 w-3.5" />
+                        Sem escala
+                      </span>
+                    )}
                   </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className={statusColors[demanda.status]}>
-                      {statusLabels[demanda.status]}
-                    </Badge>
+                  <TableCell onClick={(e) => e.stopPropagation()}>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className={`h-auto py-1 px-2 font-normal min-w-[120px] justify-between ${statusColors[displayStatus]} hover:opacity-90`}
+                          disabled={isUpdatingStatus}
+                        >
+                          {isUpdatingStatus ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <>
+                              {statusLabels[displayStatus]}
+                              <ChevronDown className="h-3.5 w-3.5 ml-1 opacity-70" />
+                            </>
+                          )}
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start">
+                        {statusOptions.map((opt) => (
+                          <DropdownMenuItem
+                            key={opt.value}
+                            onClick={() => handleStatusChange(demanda.id, opt.value)}
+                            disabled={displayStatus === opt.value}
+                          >
+                            {opt.label}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </TableCell>
                   <TableCell>
                     <Badge variant="outline" className={prioridadeColors[demanda.prioridade]}>
@@ -232,7 +291,7 @@ export function DemandasTable({ demandas, escalas, membros }: DemandasTableProps
                     {demanda.responsavel ? (
                       <div className="flex items-center gap-2">
                         <Avatar className="h-6 w-6">
-                          <AvatarImage src={demanda.responsavel.avatar_url || undefined} />
+                          <AvatarImage src={(demanda.responsavel as { avatar_url?: string })?.avatar_url || undefined} />
                           <AvatarFallback className="text-xs">
                             {demanda.responsavel.nome.split(" ").map(n => n[0]).join("").slice(0, 2)}
                           </AvatarFallback>

@@ -1,22 +1,21 @@
 import { Header } from "@/components/layout/header"
 import { FinanceiroNav } from "@/components/financeiro/financeiro-nav"
 import {
-  getLancamentos,
-  getCategoriasAll,
-  getContasAll,
-  getEscalasParaFinanceiro,
+  getCachedLancamentos,
+  getCachedCategoriasAll,
+  getCachedContasAll,
+  getCachedEscalasParaFinanceiro,
   syncAllReservasToFinanceiro,
 } from "@/app/actions/financeiro"
 import { MovimentacoesClient } from "./movimentacoes-client"
 
 export default async function MovimentacoesPage() {
-  await syncAllReservasToFinanceiro()
-
+  syncAllReservasToFinanceiro().catch(() => {})
   const [lancamentos, categorias, contas, escalas] = await Promise.all([
-    getLancamentos({ limit: 200 }),
-    getCategoriasAll(),
-    getContasAll(),
-    getEscalasParaFinanceiro(),
+    getCachedLancamentos({ limit: 300 }),
+    getCachedCategoriasAll(),
+    getCachedContasAll(),
+    getCachedEscalasParaFinanceiro(),
   ])
 
   return (

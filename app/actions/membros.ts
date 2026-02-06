@@ -2,7 +2,8 @@
 
 import { createClient } from "@/lib/supabase/server"
 import type { Membro } from "@/lib/types/database"
-import { revalidatePath } from "next/cache"
+import { revalidatePath, revalidateTag } from "next/cache"
+import { insertAuditLog } from "@/lib/audit"
 
 export interface CreateMembroInput {
   nome: string
@@ -51,6 +52,14 @@ export async function createMembro(
     return { success: false, error: error.message }
   }
 
+  await insertAuditLog(supabase, {
+    entity: "membros",
+    entity_id: novo!.id,
+    action: "create",
+    old_values: null,
+    new_values: { nome, email, ativo: input.ativo ?? true, is_admin: input.is_admin ?? false },
+  })
+  revalidateTag("membros")
   revalidatePath("/admin/usuarios")
   revalidatePath("/admin/usuarios/novo")
   return { success: true, id: novo?.id }

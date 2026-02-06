@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
+import { format } from "date-fns"
+import { ptBR } from "date-fns/locale"
 import {
   Dialog,
   DialogContent,
@@ -20,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { createLancamento, updateLancamento } from "@/app/actions/financeiro"
+import { createLancamento, updateLancamento, createCategoria } from "@/app/actions/financeiro"
 import type { FinanceiroLancamento, FinanceiroCategoria, FinanceiroConta } from "@/lib/types/database"
 
 type FormData = {
@@ -75,8 +77,23 @@ export function LancamentoFormDialog({
   const [escalaId, setEscalaId] = useState(defaultEscalaId ?? "")
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
+  const [newCategorias, setNewCategorias] = useState<FinanceiroCategoria[]>([])
+  const [showNovaCategoria, setShowNovaCategoria] = useState(false)
+  const [novaCategoriaNome, setNovaCategoriaNome] = useState("")
+  const [addingCategoria, setAddingCategoria] = useState(false)
 
-  const categoriasFiltradas = categorias.filter((c) => c.tipo === form.tipo)
+  const fromServer = categorias.filter((c) => c.tipo === form.tipo)
+  const fromNew = newCategorias.filter((c) => c.tipo === form.tipo)
+  const idsFromServer = new Set(fromServer.map((c) => c.id))
+  const onlyNew = fromNew.filter((c) => !idsFromServer.has(c.id))
+  const merged = [...fromServer, ...onlyNew]
+  const byKey = new Map<string, FinanceiroCategoria>()
+  for (const c of merged) {
+    const key = (c.nome ?? "").trim().toLowerCase()
+    if (!byKey.has(key)) byKey.set(key, c)
+    else if (c.id === form.categoria_id) byKey.set(key, c)
+  }
+  const categoriasFiltradas = Array.from(byKey.values())
 
   useEffect(() => {
     if (open) {
@@ -103,8 +120,37 @@ export function LancamentoFormDialog({
         setEscalaId(defaultEscalaId ?? "")
       }
       setError("")
+      setNewCategorias([])
+      setShowNovaCategoria(false)
+      setNovaCategoriaNome("")
     }
   }, [open, edit, defaultTipo, defaultEscalaId])
+
+  // Quando as categorias do servidor passam a incluir uma que criamos nesta sessão, removemos das locais para não duplicar
+  useEffect(() => {
+    if (newCategorias.length === 0) return
+    const serverIds = new Set(categorias.map((c) => c.id))
+    setNewCategorias((prev) => prev.filter((c) => !serverIds.has(c.id)))
+  }, [categorias])
+
+  const handleAdicionarCategoria = async () => {
+    const nome = novaCategoriaNome?.trim()
+    if (!nome) return
+    setAddingCategoria(true)
+    setError("")
+    const { data, error: err } = await createCategoria(nome, form.tipo)
+    setAddingCategoria(false)
+    if (err) {
+      setError(err)
+      return
+    }
+    if (data) {
+      setNewCategorias((prev) => [...prev, data])
+      setForm((f) => ({ ...f, categoria_id: data.id }))
+      setShowNovaCategoria(false)
+      setNovaCategoriaNome("")
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -165,7 +211,10 @@ export function LancamentoFormDialog({
               <Label>Tipo</Label>
               <Select
                 value={form.tipo}
-                onValueChange={(v: "receita" | "despesa") => setForm((f) => ({ ...f, tipo: v, categoria_id: "" }))}
+                onValueChange={(v: "receita" | "despesa") => {
+                  setForm((f) => ({ ...f, tipo: v, categoria_id: "" }))
+                  setShowNovaCategoria(false)
+                }}
               >
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -174,8 +223,19 @@ export function LancamentoFormDialog({
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <Label>Categoria</Label>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <Label>Categoria</Label>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs text-muted-foreground"
+                  onClick={() => setShowNovaCategoria((v) => !v)}
+                >
+                  + Nova categoria
+                </Button>
+              </div>
               <Select
                 value={form.categoria_id}
                 onValueChange={(v) => setForm((f) => ({ ...f, categoria_id: v }))}
@@ -187,6 +247,26 @@ export function LancamentoFormDialog({
                   ))}
                 </SelectContent>
               </Select>
+              {showNovaCategoria && (
+                <div className="flex gap-2 pt-1">
+                  <Input
+                    placeholder="Nome da nova categoria"
+                    value={novaCategoriaNome}
+                    onChange={(e) => setNovaCategoriaNome(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), handleAdicionarCategoria())}
+                    className="flex-1"
+                  />
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    disabled={!novaCategoriaNome.trim() || addingCategoria}
+                    onClick={handleAdicionarCategoria}
+                  >
+                    {addingCategoria ? "…" : "Adicionar"}
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
@@ -245,7 +325,7 @@ export function LancamentoFormDialog({
                 <SelectItem value="__none__">Nenhuma</SelectItem>
                 {escalas.map((e) => (
                   <SelectItem key={e.id} value={e.id}>
-                    {e.navio?.nome ?? "Navio"} • {e.porto} • {e.data_chegada?.slice(0, 10)}
+                    {e.navio?.nome ?? "Navio"} • {e.porto} • {e.data_chegada ? format(new Date(e.data_chegada), "dd/MM/yyyy", { locale: ptBR }) : "—"}
                   </SelectItem>
                 ))}
               </SelectContent>

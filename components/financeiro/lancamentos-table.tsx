@@ -46,16 +46,16 @@ export function LancamentosTable({
   }
 
   return (
-    <div className="rounded-lg border bg-card overflow-hidden">
-      <Table>
+    <div className="rounded-lg border bg-card overflow-x-auto">
+      <Table className="min-w-[640px]">
         <TableHeader>
           <TableRow>
-            <TableHead>Vencimento</TableHead>
-            <TableHead>Descrição</TableHead>
-            {showEscala && <TableHead>Escala / Navio</TableHead>}
-            <TableHead>Categoria</TableHead>
-            <TableHead className="text-right">Valor</TableHead>
-            <TableHead>Status</TableHead>
+            <TableHead className="whitespace-nowrap">Vencimento</TableHead>
+            <TableHead className="min-w-[120px]">Descrição</TableHead>
+            {showEscala && <TableHead className="min-w-[160px] whitespace-nowrap">Escala / Navio</TableHead>}
+            <TableHead className="min-w-[100px]">Categoria</TableHead>
+            <TableHead className="text-right min-w-[100px] whitespace-nowrap">Valor</TableHead>
+            <TableHead className="whitespace-nowrap">Status</TableHead>
             <TableHead className="w-10" />
           </TableRow>
         </TableHeader>
@@ -67,37 +67,37 @@ export function LancamentosTable({
             return (
               <TableRow key={l.id}>
                 <TableCell className="whitespace-nowrap">{formatDate(l.data_vencimento)}</TableCell>
-                <TableCell>
-                  <div className="font-medium">{l.descricao || "—"}</div>
+                <TableCell className="min-w-0">
+                  <div className="font-medium break-words">{l.descricao || "—"}</div>
                   {l.documento_ref && (
-                    <div className="text-xs text-muted-foreground">{l.documento_ref}</div>
+                    <div className="text-xs text-muted-foreground break-words">{l.documento_ref}</div>
                   )}
                 </TableCell>
                 {showEscala && (
-                  <TableCell>
+                  <TableCell className="min-w-[160px]">
                     {l.escala_id ? (
                       <Link
                         href={`/escalas/${l.escala_id}`}
-                        className="text-primary hover:underline inline-flex items-center gap-1"
+                        className="text-primary hover:underline inline-flex items-center gap-1 break-words"
                       >
-                        {navioNome} • {porto}
-                        <ExternalLink className="h-3 w-3" />
+                        <span className="break-words">{navioNome} • {porto}</span>
+                        <ExternalLink className="h-3 w-3 shrink-0" />
                       </Link>
                     ) : (
                       "—"
                     )}
                   </TableCell>
                 )}
-                <TableCell>
+                <TableCell className="min-w-0">
                   {l.categoria ? (
                     <span
-                      className="inline-block w-2 h-2 rounded-full mr-1.5 align-middle"
+                      className="inline-block w-2 h-2 rounded-full mr-1.5 align-middle shrink-0"
                       style={{ backgroundColor: (l.categoria as { cor?: string }).cor ?? "#6366f1" }}
                     />
                   ) : null}
-                  {(l.categoria as { nome?: string })?.nome ?? "—"}
+                  <span className="break-words">{(l.categoria as { nome?: string })?.nome ?? "—"}</span>
                 </TableCell>
-                <TableCell className="text-right font-mono">
+                <TableCell className="text-right font-mono whitespace-nowrap min-w-[100px]">
                   <span className={l.tipo === "receita" ? "text-emerald-600" : "text-rose-600"}>
                     {l.tipo === "receita" ? "+" : "-"} {formatMoney(l.valor)}
                   </span>

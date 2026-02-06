@@ -2,27 +2,29 @@
 
 import { createClient } from "@/lib/supabase/server"
 import type { Escala, Navio, Demanda, Membro } from "@/lib/types/database"
-import { revalidatePath } from "next/cache"
+import { revalidatePath, unstable_cache, revalidateTag } from "next/cache"
+import { insertAuditLog } from "@/lib/audit"
 
-export async function getEscalas(limit?: number): Promise<(Escala & { navio: Navio })[]> {
+async function fetchEscalas(limit?: number): Promise<(Escala & { navio: Navio })[]> {
   const supabase = await createClient()
-
   const base = supabase
     .from("escalas")
-    .select(`
-      *,
-      navio:navios(id, nome, companhia)
-    `)
+    .select(`*, navio:navios(id, nome, companhia)`)
     .order("data_chegada", { ascending: false })
-  const { data: escalas, error } =
-    limit != null ? await base.limit(limit) : await base
-
+  const { data: escalas, error } = limit != null ? await base.limit(limit) : await base
   if (error) {
     console.error("Error fetching escalas:", error)
     return []
   }
-
   return escalas || []
+}
+
+export async function getEscalas(limit?: number): Promise<(Escala & { navio: Navio })[]> {
+  const key = `escalas-${limit ?? "all"}`
+  return unstable_cache(() => fetchEscalas(limit), [key], {
+    revalidate: 45,
+    tags: ["escalas"],
+  })()
 }
 
 export async function getEscala(id: string): Promise<Escala | null> {
@@ -95,6 +97,14 @@ export async function createEscala(data: {
     return { success: false, error: "Falha ao criar escala. Banco de dados não conectado ou erro desconhecido." }
   }
 
+  await insertAuditLog(supabase, {
+    entity: "escalas",
+    entity_id: escala.id,
+    action: "create",
+    old_values: null,
+    new_values: escala as Record<string, unknown>,
+  })
+  revalidateTag("escalas")
   revalidatePath("/escalas")
   revalidatePath(`/escalas/${escala.id}`)
   revalidatePath("/dashboard")
@@ -115,6 +125,7 @@ export async function updateEscala(
 ): Promise<{ success: boolean; error?: string }> {
   const supabase = await createClient()
 
+  const { data: oldRow } = await supabase.from("escalas").select("*").eq("id", id).single()
   const updateData: any = {
     ...data,
     updated_at: new Date().toISOString(),
@@ -130,6 +141,24 @@ export async function updateEscala(
     return { success: false, error: error.message }
   }
 
+  const oldValues: Record<string, unknown> = {}
+  const newValues: Record<string, unknown> = {}
+  for (const key of ["navio_id", "porto", "data_chegada", "data_saida", "status", "observacoes"] as const) {
+    if (data[key] !== undefined && oldRow) {
+      oldValues[key] = oldRow[key] ?? null
+      newValues[key] = data[key] ?? null
+    }
+  }
+  if (Object.keys(newValues).length > 0) {
+    await insertAuditLog(supabase, {
+      entity: "escalas",
+      entity_id: id,
+      action: "update",
+      old_values: oldValues,
+      new_values: newValues,
+    })
+  }
+  revalidateTag("escalas")
   revalidatePath("/escalas")
   revalidatePath(`/escalas/${id}`)
   revalidatePath("/dashboard")
@@ -140,6 +169,7 @@ export async function updateEscala(
 export async function deleteEscala(id: string): Promise<{ success: boolean; error?: string }> {
   const supabase = await createClient()
 
+  const { data: oldRow } = await supabase.from("escalas").select("*").eq("id", id).single()
   const { error } = await supabase
     .from("escalas")
     .delete()
@@ -150,6 +180,14 @@ export async function deleteEscala(id: string): Promise<{ success: boolean; erro
     return { success: false, error: error.message }
   }
 
+  await insertAuditLog(supabase, {
+    entity: "escalas",
+    entity_id: id,
+    action: "delete",
+    old_values: oldRow as Record<string, unknown> ?? null,
+    new_values: null,
+  })
+  revalidateTag("escalas")
   revalidatePath("/escalas")
   revalidatePath("/dashboard")
 

@@ -1,7 +1,8 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { revalidatePath } from "next/cache"
+import { revalidatePath, unstable_cache, revalidateTag } from "next/cache"
+import { insertAuditLog } from "@/lib/audit"
 import type {
   FinanceiroCategoria,
   FinanceiroConta,
@@ -42,6 +43,51 @@ export async function getCategoriasAll(): Promise<FinanceiroCategoria[]> {
     return []
   }
   return data ?? []
+}
+
+export async function createCategoria(nome: string, tipo: "receita" | "despesa") {
+  const supabase = await createClient()
+  const nomeTrim = nome?.trim()
+  if (!nomeTrim) return { data: null as FinanceiroCategoria | null, error: "Nome da categoria é obrigatório." }
+  const nomeNorm = nomeTrim.toLowerCase()
+  const { data: existentes } = await supabase
+    .from("financeiro_categorias")
+    .select("id, nome, tipo, cor, icone, ativo, created_at, updated_at")
+    .eq("tipo", tipo)
+    .eq("ativo", true)
+  const jaExiste = (existentes ?? []).find(
+    (c) => (c.nome ?? "").trim().toLowerCase() === nomeNorm
+  ) as FinanceiroCategoria | undefined
+  if (jaExiste) {
+    revalidateTag(FINANCEIRO_CACHE_TAG)
+    revalidatePath(FINANCEIRO_PATH)
+    revalidatePath("/financeiro/contas-receber")
+    revalidatePath("/financeiro/contas-pagar")
+    revalidatePath("/financeiro/movimentacoes")
+    return { data: jaExiste, error: null }
+  }
+  const { data, error } = await supabase
+    .from("financeiro_categorias")
+    .insert({ nome: nomeTrim, tipo })
+    .select()
+    .single()
+  if (error) {
+    console.error("createCategoria:", error)
+    return { data: null, error: error.message }
+  }
+  await insertAuditLog(supabase, {
+    entity: "financeiro_categorias",
+    entity_id: data.id,
+    action: "create",
+    old_values: null,
+    new_values: { nome: nomeTrim, tipo },
+  })
+  revalidateTag(FINANCEIRO_CACHE_TAG)
+  revalidatePath(FINANCEIRO_PATH)
+  revalidatePath("/financeiro/contas-receber")
+  revalidatePath("/financeiro/contas-pagar")
+  revalidatePath("/financeiro/movimentacoes")
+  return { data: data as FinanceiroCategoria, error: null }
 }
 
 // ——— Contas ———
@@ -150,6 +196,14 @@ export async function createLancamento(input: {
     console.error("createLancamento:", error)
     return { data: null, error: error.message }
   }
+  await insertAuditLog(supabase, {
+    entity: "financeiro_lancamentos",
+    entity_id: data.id,
+    action: "create",
+    old_values: null,
+    new_values: data as Record<string, unknown>,
+  })
+  revalidateTag(FINANCEIRO_CACHE_TAG)
   revalidatePath(FINANCEIRO_PATH)
   revalidatePath("/financeiro/contas-receber")
   revalidatePath("/financeiro/contas-pagar")
@@ -175,6 +229,11 @@ export async function updateLancamento(
   }>
 ) {
   const supabase = await createClient()
+  const { data: oldRow } = await supabase
+    .from("financeiro_lancamentos")
+    .select("*")
+    .eq("id", id)
+    .single()
   const { data, error } = await supabase
     .from("financeiro_lancamentos")
     .update({ ...input, updated_at: new Date().toISOString() })
@@ -185,6 +244,24 @@ export async function updateLancamento(
     console.error("updateLancamento:", error)
     return { data: null, error: error.message }
   }
+  const oldValues: Record<string, unknown> = {}
+  const newValues: Record<string, unknown> = {}
+  for (const key of Object.keys(input)) {
+    if (input[key as keyof typeof input] !== undefined && oldRow) {
+      oldValues[key] = oldRow[key] ?? null
+      newValues[key] = input[key as keyof typeof input] ?? null
+    }
+  }
+  if (Object.keys(newValues).length > 0) {
+    await insertAuditLog(supabase, {
+      entity: "financeiro_lancamentos",
+      entity_id: id,
+      action: "update",
+      old_values: oldValues,
+      new_values: newValues,
+    })
+  }
+  revalidateTag(FINANCEIRO_CACHE_TAG)
   revalidatePath(FINANCEIRO_PATH)
   revalidatePath("/financeiro/contas-receber")
   revalidatePath("/financeiro/contas-pagar")
@@ -194,11 +271,24 @@ export async function updateLancamento(
 
 export async function deleteLancamento(id: string) {
   const supabase = await createClient()
+  const { data: oldRow } = await supabase
+    .from("financeiro_lancamentos")
+    .select("*")
+    .eq("id", id)
+    .single()
   const { error } = await supabase.from("financeiro_lancamentos").delete().eq("id", id)
   if (error) {
     console.error("deleteLancamento:", error)
     return { error: error.message }
   }
+  await insertAuditLog(supabase, {
+    entity: "financeiro_lancamentos",
+    entity_id: id,
+    action: "delete",
+    old_values: oldRow as Record<string, unknown> ?? null,
+    new_values: null,
+  })
+  revalidateTag(FINANCEIRO_CACHE_TAG)
   revalidatePath(FINANCEIRO_PATH)
   revalidatePath("/financeiro/contas-receber")
   revalidatePath("/financeiro/contas-pagar")
@@ -270,6 +360,14 @@ export async function createComissao(input: {
     console.error("createComissao:", error)
     return { data: null, error: error.message }
   }
+  await insertAuditLog(supabase, {
+    entity: "financeiro_comissoes",
+    entity_id: data.id,
+    action: "create",
+    old_values: null,
+    new_values: data as Record<string, unknown>,
+  })
+  revalidateTag(FINANCEIRO_CACHE_TAG)
   revalidatePath(FINANCEIRO_PATH)
   revalidatePath("/financeiro/comissoes")
   return { data, error: null }
@@ -288,6 +386,11 @@ export async function updateComissao(
   }>
 ) {
   const supabase = await createClient()
+  const { data: oldRow } = await supabase
+    .from("financeiro_comissoes")
+    .select("*")
+    .eq("id", id)
+    .single()
   const updates: Record<string, unknown> = { ...input, updated_at: new Date().toISOString() }
   if (input?.valor_bruto != null && input?.percentual_comissao != null) {
     updates.valor_comissao = (input.valor_bruto * input.percentual_comissao) / 100
@@ -302,6 +405,24 @@ export async function updateComissao(
     console.error("updateComissao:", error)
     return { data: null, error: error.message }
   }
+  const oldValues: Record<string, unknown> = {}
+  const newValues: Record<string, unknown> = {}
+  for (const key of Object.keys(input)) {
+    if (input[key as keyof typeof input] !== undefined && oldRow) {
+      oldValues[key] = oldRow[key] ?? null
+      newValues[key] = input[key as keyof typeof input] ?? null
+    }
+  }
+  if (Object.keys(newValues).length > 0) {
+    await insertAuditLog(supabase, {
+      entity: "financeiro_comissoes",
+      entity_id: id,
+      action: "update",
+      old_values: oldValues,
+      new_values: newValues,
+    })
+  }
+  revalidateTag(FINANCEIRO_CACHE_TAG)
   revalidatePath(FINANCEIRO_PATH)
   revalidatePath("/financeiro/comissoes")
   return { data, error: null }
@@ -381,13 +502,67 @@ export async function getEscalasParaFinanceiro(): Promise<(Escala & { navio: Nav
   const { data, error } = await supabase
     .from("escalas")
     .select("*, navio:navios(id, nome, companhia)")
-    .order("data_chegada", { ascending: false })
+    .order("data_chegada", { ascending: true })
     .limit(100)
   if (error) {
     console.error("getEscalasParaFinanceiro:", error)
     return []
   }
   return data ?? []
+}
+
+// ——— Cache (revalidate 25s + tag para invalidar nas mutations) ———
+const CACHE_FINANCEIRO_SEC = 25
+const FINANCEIRO_CACHE_TAG = "financeiro"
+
+export async function getCachedFinanceiroResumo(): Promise<FinanceiroResumo> {
+  return unstable_cache(getFinanceiroResumo, ["financeiro-resumo"], {
+    revalidate: CACHE_FINANCEIRO_SEC,
+    tags: [FINANCEIRO_CACHE_TAG],
+  })()
+}
+
+export async function getCachedLancamentos(
+  filters?: Parameters<typeof getLancamentos>[0]
+): Promise<FinanceiroLancamento[]> {
+  const key = `lanc-${filters?.tipo ?? "x"}-${filters?.limit ?? 0}`
+  return unstable_cache(
+    () => getLancamentos(filters),
+    ["financeiro-lancamentos", key],
+    { revalidate: CACHE_FINANCEIRO_SEC, tags: [FINANCEIRO_CACHE_TAG] }
+  )()
+}
+
+export async function getCachedComissoes(
+  filters?: Parameters<typeof getComissoes>[0]
+): Promise<FinanceiroComissao[]> {
+  const key = `com-${filters?.limit ?? 0}`
+  return unstable_cache(
+    () => getComissoes(filters),
+    ["financeiro-comissoes", key],
+    { revalidate: CACHE_FINANCEIRO_SEC, tags: [FINANCEIRO_CACHE_TAG] }
+  )()
+}
+
+export async function getCachedCategoriasAll(): Promise<FinanceiroCategoria[]> {
+  return unstable_cache(getCategoriasAll, ["financeiro-categorias"], {
+    revalidate: CACHE_FINANCEIRO_SEC,
+    tags: [FINANCEIRO_CACHE_TAG],
+  })()
+}
+
+export async function getCachedContasAll(): Promise<FinanceiroConta[]> {
+  return unstable_cache(getContasAll, ["financeiro-contas"], {
+    revalidate: CACHE_FINANCEIRO_SEC,
+    tags: [FINANCEIRO_CACHE_TAG],
+  })()
+}
+
+export async function getCachedEscalasParaFinanceiro(): Promise<(Escala & { navio: Navio })[]> {
+  return unstable_cache(getEscalasParaFinanceiro, ["financeiro-escalas"], {
+    revalidate: CACHE_FINANCEIRO_SEC,
+    tags: [FINANCEIRO_CACHE_TAG],
+  })()
 }
 
 // ——— Sincronização Reserva Hotel → Despesa (Hospedagem) ———
@@ -509,6 +684,7 @@ export async function syncDespesaReservaHotel(
       .eq("id", existing.id)
   }
 
+  revalidateTag(FINANCEIRO_CACHE_TAG)
   revalidatePath(FINANCEIRO_PATH)
   revalidatePath("/financeiro/contas-pagar")
   revalidatePath("/financeiro/movimentacoes")
@@ -518,10 +694,13 @@ export async function syncDespesaReservaHotel(
   return { success: true }
 }
 
+const SYNC_BATCH_SIZE = 8
+
 /**
  * Sincroniza todas as demandas que têm custo de reserva de hotel (reserva_valor)
  * com o financeiro, criando as despesas que ainda não existem.
  * Chamar ao abrir o financeiro para garantir que os custos das reservas apareçam.
+ * Roda em lotes em paralelo para não travar a página.
  */
 export async function syncAllReservasToFinanceiro(): Promise<void> {
   const supabase = await createClient()
@@ -532,7 +711,8 @@ export async function syncAllReservasToFinanceiro(): Promise<void> {
     .gt("reserva_valor", 0)
 
   if (error || !demandas?.length) return
-  for (const d of demandas) {
-    await syncDespesaReservaHotel(d.id)
+  for (let i = 0; i < demandas.length; i += SYNC_BATCH_SIZE) {
+    const batch = demandas.slice(i, i + SYNC_BATCH_SIZE)
+    await Promise.all(batch.map((d) => syncDespesaReservaHotel(d.id)))
   }
 }

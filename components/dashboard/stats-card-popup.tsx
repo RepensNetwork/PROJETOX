@@ -30,7 +30,8 @@ import {
   User,
   ExternalLink,
   Loader2,
-  ChevronDown
+  ChevronDown,
+  List
 } from "lucide-react"
 import type { Escala, Demanda, Navio } from "@/lib/types/database"
 import { updateDemanda } from "@/app/actions/demandas"
@@ -119,6 +120,8 @@ interface DemandasPopupProps {
   onOpenChange: (open: boolean) => void
   title: string
   description: string
+  /** Mensagem quando a lista está vazia (ex.: "Nenhuma demanda ativa") */
+  emptyMessage?: string
 }
 
 const statusOptions: { value: Demanda["status"]; label: string }[] = [
@@ -129,11 +132,12 @@ const statusOptions: { value: Demanda["status"]; label: string }[] = [
   { value: "cancelada", label: "Cancelada" },
 ]
 
-export function DemandasPopup({ demandas, open, onOpenChange, title, description }: DemandasPopupProps) {
+export function DemandasPopup({ demandas = [], open, onOpenChange, title, description, emptyMessage }: DemandasPopupProps) {
   const router = useRouter()
   const [updatingId, setUpdatingId] = useState<string | null>(null)
   /** Status otimista: atualiza a UI na hora; limpa ao fechar o popup */
   const [localStatus, setLocalStatus] = useState<Record<string, Demanda["status"]>>({})
+  const list = Array.isArray(demandas) ? demandas : []
 
   const statusColors: Record<Demanda["status"], string> = {
     pendente: "bg-warning/10 text-warning-foreground border-warning/30",
@@ -190,16 +194,22 @@ export function DemandasPopup({ demandas, open, onOpenChange, title, description
             {title}
           </DialogTitle>
           <DialogDescription>
-            {description} ({demandas.length}). Clique no status para alterar.
+            {description} ({list.length}). Clique no status para alterar. Mesma lista da página Demandas, apenas outro acesso.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3 min-h-0 flex-1 overflow-y-auto -mx-1 px-1">
-          {demandas.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              Nenhuma demanda encontrada
+          {list.length === 0 ? (
+            <div className="text-center py-8 space-y-3 text-muted-foreground">
+              <p>{emptyMessage ?? "Nenhuma demanda encontrada."}</p>
+              <Button variant="outline" size="sm" asChild className="gap-2 mt-2">
+                <Link href="/demandas">
+                  <List className="h-4 w-4" />
+                  Abrir página Demandas
+                </Link>
+              </Button>
             </div>
           ) : (
-            demandas.map((demanda) => {
+            list.map((demanda) => {
               const displayStatus = localStatus[demanda.id] ?? demanda.status
               const isOverdue = demanda.prazo && 
                 new Date(demanda.prazo) < new Date() && 
@@ -221,7 +231,9 @@ export function DemandasPopup({ demandas, open, onOpenChange, title, description
                     <div className="text-sm text-muted-foreground space-y-1">
                       <div className="flex items-center gap-2">
                         <Ship className="h-3.5 w-3.5 shrink-0" />
-                        {demanda.escala.navio.nome} - {demanda.escala.porto}
+                        {demanda.escala?.navio?.nome != null
+                          ? `${demanda.escala.navio.nome} - ${demanda.escala.porto ?? ""}`
+                          : "Sem escala"}
                       </div>
                       {demanda.prazo && (
                         <div className={`flex items-center gap-2 ${
@@ -289,6 +301,14 @@ export function DemandasPopup({ demandas, open, onOpenChange, title, description
               )
             })
           )}
+        </div>
+        <div className="shrink-0 border-t pt-3 mt-3 flex justify-center">
+          <Button variant="outline" size="sm" asChild className="gap-2">
+            <Link href="/demandas">
+              <List className="h-4 w-4" />
+              Ver lista completa na página Demandas
+            </Link>
+          </Button>
         </div>
       </DialogContent>
     </Dialog>

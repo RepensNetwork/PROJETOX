@@ -27,6 +27,9 @@ import { format, formatDistanceToNow } from "date-fns"
 import { ptBR } from "date-fns/locale/pt-BR"
 import type { Demanda } from "@/lib/types/database"
 
+export const dynamic = "force-dynamic"
+export const revalidate = 0
+
 interface DemandaDetailPageProps {
   params: Promise<{ id: string }>
 }

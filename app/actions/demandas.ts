@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server"
 import type { Demanda, Escala, Navio, Membro, Comentario, Historico } from "@/lib/types/database"
 import { buildTransportLegs, type TransporteLeg } from "@/lib/transportes"
 import type { UpdateReservaHotelInput } from "@/lib/reservas"
-import { revalidatePath } from "next/cache"
+import { revalidatePath, unstable_cache, revalidateTag } from "next/cache"
 import { criarAlertasParaDemanda } from "@/app/actions/alertas"
 import { syncDespesaReservaHotel } from "@/app/actions/financeiro"
 import { criarNotificacaoDemanda } from "@/app/actions/notificacoes-demanda"
@@ -53,12 +53,13 @@ export async function getDemandasForDashboard(
   return (demandas || []) as (Demanda & { escala: Escala & { navio: Navio }; responsavel: Membro | null })[]
 }
 
-/** Lista de demandas para a página /demandas: limit + select enxuto para carregar mais rápido. */
-export async function getDemandasForList(
-  limit = 800
+const CACHE_DEMANDAS = 30
+
+/** Lista de demandas para a página /demandas: limit + select enxuto + cache. */
+async function fetchDemandasForList(
+  limit: number
 ): Promise<(Demanda & { escala: Escala & { navio: Navio }; responsavel: Membro | null })[]> {
   const supabase = await createClient()
-
   const { data: demandas, error } = await supabase
     .from("demandas")
     .select(`
@@ -68,13 +69,20 @@ export async function getDemandasForList(
     `)
     .order("updated_at", { ascending: false })
     .limit(limit)
-
   if (error) {
     console.error("Error fetching demandas for list:", error)
     return []
   }
-
   return (demandas || []) as (Demanda & { escala: Escala & { navio: Navio }; responsavel: Membro | null })[]
+}
+
+export async function getDemandasForList(
+  limit = 800
+): Promise<(Demanda & { escala: Escala & { navio: Navio }; responsavel: Membro | null })[]> {
+  return unstable_cache(() => fetchDemandasForList(limit), ["demandas-list", String(limit)], {
+    revalidate: CACHE_DEMANDAS,
+    tags: ["demandas"],
+  })()
 }
 
 export async function getDemandasByResponsavel(
@@ -295,6 +303,8 @@ export async function createDemanda(data: {
       }
     }
 
+    revalidateTag("demandas")
+    revalidateTag("dashboard")
     revalidatePath("/demandas")
     revalidatePath(`/demandas/${demanda.id}`)
     revalidatePath("/dashboard")
@@ -479,24 +489,25 @@ export async function addComentario(
   return { success: true, comentario: comentario as Comentario }
 }
 
-export async function getEscalasForSelect(): Promise<(Escala & { navio: Navio })[]> {
+async function fetchEscalasForSelect(): Promise<(Escala & { navio: Navio })[]> {
   const supabase = await createClient()
-
   const { data: escalas, error } = await supabase
     .from("escalas")
-    .select(`
-      *,
-      navio:navios(*)
-    `)
+    .select(`*, navio:navios(*)`)
     .in("status", ["planejada", "em_operacao"])
     .order("data_chegada", { ascending: true })
-
   if (error) {
     console.error("Error fetching escalas for select:", error)
     return []
   }
-
   return escalas || []
+}
+
+export async function getEscalasForSelect(): Promise<(Escala & { navio: Navio })[]> {
+  return unstable_cache(fetchEscalasForSelect, ["escalas-for-select"], {
+    revalidate: 45,
+    tags: ["escalas", "demandas"],
+  })()
 }
 
 /** Atualiza a lista de trechos de transporte da demanda (para demandas tripulante). */
@@ -522,6 +533,8 @@ export async function updateDemandaTransporteLegs(
     console.error("Error updating transporte legs:", error)
     return { success: false, error: error.message }
   }
+  revalidateTag("demandas")
+  revalidateTag("dashboard")
   revalidatePath("/demandas")
   revalidatePath(`/demandas/${demandaId}`)
   revalidatePath("/motorista")
@@ -604,6 +617,8 @@ export async function updateDemandaReserva(
     return { success: false, error: error.message }
   }
   await syncDespesaReservaHotel(demandaId)
+  revalidateTag("demandas")
+  revalidateTag("dashboard")
   revalidatePath("/demandas")
   revalidatePath(`/demandas/${demandaId}`)
   revalidatePath("/reservas")
@@ -630,6 +645,8 @@ export async function clearDemandaReserva(demandaId: string): Promise<{ success:
     return { success: false, error: error.message }
   }
   await syncDespesaReservaHotel(demandaId)
+  revalidateTag("demandas")
+  revalidateTag("dashboard")
   revalidatePath("/demandas")
   revalidatePath(`/demandas/${demandaId}`)
   revalidatePath("/reservas")

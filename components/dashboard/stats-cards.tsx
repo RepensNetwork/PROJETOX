@@ -14,15 +14,15 @@ interface StatsCardsProps {
   navios: Navio[]
 }
 
-export function StatsCards({ stats, escalas, allDemandas, navios }: StatsCardsProps) {
+export function StatsCards({ stats, escalas, allDemandas = [], navios }: StatsCardsProps) {
   const [escalasOpen, setEscalasOpen] = useState(false)
   const [demandasOpen, setDemandasOpen] = useState(false)
   const [alertasOpen, setAlertasOpen] = useState(false)
   const [concluidasOpen, setConcluidasOpen] = useState(false)
 
-  const demandasAtivas = allDemandas.filter(d => d.status !== "concluida")
-
-  const alertasDemandas = allDemandas.filter(d => {
+  const demandasList = Array.isArray(allDemandas) ? allDemandas : []
+  const demandasAtivas = demandasList.filter(d => d.status !== "concluida" && d.status !== "cancelada")
+  const alertasDemandas = demandasList.filter(d => {
     const now = new Date()
     const isAtrasada = d.prazo && new Date(d.prazo) < now && d.status !== "concluida"
     const isCritica = d.prioridade === "urgente" && d.status !== "concluida"
@@ -30,7 +30,7 @@ export function StatsCards({ stats, escalas, allDemandas, navios }: StatsCardsPr
     return isAtrasada || isCritica || isBloqueada
   })
 
-  const concluidasDemandas = allDemandas.filter(d => d.status === "concluida")
+  const concluidasDemandas = demandasList.filter(d => d.status === "concluida")
 
   const escalasPorNavio = useMemo(() => {
     const map = new Map<string, number>()
@@ -173,8 +173,9 @@ export function StatsCards({ stats, escalas, allDemandas, navios }: StatsCardsPr
         demandas={demandasAtivas} 
         open={demandasOpen} 
         onOpenChange={setDemandasOpen}
-        title="Todas as Demandas (ativas)"
-        description="Demandas ativas — pendentes, em andamento ou aguardando terceiro (não concluídas)"
+        title="Todas as Demandas"
+        description="Demandas ativas — pendentes, em andamento ou aguardando terceiro (exclui concluídas e canceladas)"
+        emptyMessage="Nenhuma demanda ativa no momento. Todas podem estar concluídas ou canceladas. Use o card 'Concluídas' ou a página Demandas para ver todas."
       />
 
       <DemandasPopup 

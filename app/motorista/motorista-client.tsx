@@ -27,6 +27,8 @@ interface MotoristaClientProps {
   dataFiltro?: string
 }
 
+type FilterMode = "pendentes" | "concluidas" | "todos"
+
 const statusLabels: Record<string, string> = {
   pendente: "Pendente",
   concluido: "Concluído",
@@ -60,7 +62,7 @@ export function MotoristaClient({ transportes, dataFiltro }: MotoristaClientProp
   const [pickupMap, setPickupMap] = useState<Record<string, string>>({})
   const [pickupAtMap, setPickupAtMap] = useState<Record<string, string>>({})
   const [dropoffMap, setDropoffMap] = useState<Record<string, string>>({})
-  const [showAll, setShowAll] = useState(false) // false = ocultar concluídos (padrão); true = mostrar todos
+  const [filterMode, setFilterMode] = useState<FilterMode>("pendentes")
   const [message, setMessage] = useState<string | null>(null)
   const [expandLeg, setExpandLeg] = useState<string | null>(null)
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -399,22 +401,37 @@ export function MotoristaClient({ transportes, dataFiltro }: MotoristaClientProp
             </p>
           </div>
           <div className="flex gap-2 flex-wrap items-center">
-            <Button type="button" variant="outline" size="sm" onClick={() => setShowAll((p) => !p)}>
-              {showAll ? "Ocultar concluídos" : "Mostrar todos"}
+            <Button
+              type="button"
+              variant={filterMode === "pendentes" ? "secondary" : "outline"}
+              size="sm"
+              onClick={() => setFilterMode("pendentes")}
+              title="Ver só pendentes"
+            >
+              Pendentes ({resumo.pendentes})
             </Button>
             {resumo.concluidas > 0 && (
               <Button
                 type="button"
-                variant={showAll ? "secondary" : "outline"}
+                variant={filterMode === "concluidas" ? "secondary" : "outline"}
                 size="sm"
                 className="gap-1.5"
-                onClick={() => setShowAll(true)}
-                title={showAll ? "Concluídas visíveis" : "Ver concluídas"}
+                onClick={() => setFilterMode("concluidas")}
+                title="Ver só concluídas"
               >
                 <CheckCheck className="h-4 w-4 text-success" />
                 <span>Concluídas ({resumo.concluidas})</span>
               </Button>
             )}
+            <Button
+              type="button"
+              variant={filterMode === "todos" ? "secondary" : "outline"}
+              size="sm"
+              onClick={() => setFilterMode("todos")}
+              title="Ver todas"
+            >
+              Mostrar todos
+            </Button>
             <Button
               type="button"
               variant="default"
@@ -439,7 +456,12 @@ export function MotoristaClient({ transportes, dataFiltro }: MotoristaClientProp
       ) : (
         <div className="space-y-6">
           {porHorario.map(({ slot, entries }) => {
-            const toShow = showAll ? entries : entries.filter((e) => (e.leg.status || "pendente") !== "concluido")
+            const toShow =
+              filterMode === "todos"
+                ? entries
+                : filterMode === "concluidas"
+                  ? entries.filter((e) => (e.leg.status || "pendente") === "concluido")
+                  : entries.filter((e) => (e.leg.status || "pendente") !== "concluido")
             if (toShow.length === 0) return null
 
             return (

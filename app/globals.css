@@ -4,22 +4,22 @@
 
 /* ========== Design system — estilo Figma / UI premium ========== */
 :root {
-  /* Cores base — tema claro suave */
+  /* Cores base — tema claro: fundo branco/claro e texto preto */
   --background: oklch(0.985 0.003 260);
-  --foreground: oklch(0.18 0.02 260);
+  --foreground: oklch(0.12 0.01 260);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.18 0.02 260);
+  --card-foreground: oklch(0.12 0.01 260);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.18 0.02 260);
+  --popover-foreground: oklch(0.12 0.01 260);
   /* Primary — azul refinado */
   --primary: oklch(0.5 0.18 255);
   --primary-foreground: oklch(0.99 0 0);
   --secondary: oklch(0.96 0.01 260);
-  --secondary-foreground: oklch(0.25 0.02 260);
+  --secondary-foreground: oklch(0.15 0.01 260);
   --muted: oklch(0.965 0.008 260);
-  --muted-foreground: oklch(0.45 0.02 260);
+  --muted-foreground: oklch(0.35 0.01 260);
   --accent: oklch(0.55 0.14 280);
-  --accent-foreground: oklch(0.99 0 0);
+  --accent-foreground: oklch(0.12 0.01 260);
   --destructive: oklch(0.52 0.2 25);
   --destructive-foreground: oklch(0.99 0 0);
   --border: oklch(0.92 0.01 260);
@@ -44,16 +44,16 @@
   --shadow-xl: 0 20px 25px -5px oklch(0 0 0 / 0.06), 0 8px 10px -6px oklch(0 0 0 / 0.04);
   /* Sidebar */
   --sidebar: oklch(0.985 0.003 260);
-  --sidebar-foreground: oklch(0.18 0.02 260);
+  --sidebar-foreground: oklch(0.12 0.01 260);
   --sidebar-primary: oklch(0.5 0.18 255);
   --sidebar-primary-foreground: oklch(0.99 0 0);
   --sidebar-accent: oklch(0.96 0.01 260);
-  --sidebar-accent-foreground: oklch(0.25 0.02 260);
+  --sidebar-accent-foreground: oklch(0.12 0.01 260);
   --sidebar-border: oklch(0.92 0.01 260);
   --sidebar-ring: oklch(0.5 0.18 255);
   /* Semantic */
   --warning: oklch(0.75 0.18 75);
-  --warning-foreground: oklch(0.22 0.02 75);
+  --warning-foreground: oklch(0.15 0.02 75);
   --success: oklch(0.55 0.16 155);
   --success-foreground: oklch(0.99 0 0);
 }

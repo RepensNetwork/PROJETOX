@@ -1,15 +1,14 @@
 import { Header } from "@/components/layout/header"
 import { FinanceiroNav } from "@/components/financeiro/financeiro-nav"
-import { getLancamentos } from "@/app/actions/financeiro"
 import { ContasReceberClient } from "./contas-receber-client"
-import { getCategoriasAll, getContasAll, getEscalasParaFinanceiro } from "@/app/actions/financeiro"
+import { getCachedLancamentos, getCachedCategoriasAll, getCachedContasAll, getCachedEscalasParaFinanceiro } from "@/app/actions/financeiro"
 
 export default async function ContasReceberPage() {
   const [todosReceita, categorias, contas, escalas] = await Promise.all([
-    getLancamentos({ tipo: "receita" }),
-    getCategoriasAll(),
-    getContasAll(),
-    getEscalasParaFinanceiro(),
+    getCachedLancamentos({ tipo: "receita", limit: 500 }),
+    getCachedCategoriasAll(),
+    getCachedContasAll(),
+    getCachedEscalasParaFinanceiro(),
   ])
 
   const aReceber = todosReceita.filter(
