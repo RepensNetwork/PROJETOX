@@ -1,6 +1,8 @@
 import { createServerClient } from "@supabase/ssr"
 import { cookies } from "next/headers"
 
+let _supabaseNotConfiguredWarned = false
+
 export async function createClient() {
   let cookieStore: Awaited<ReturnType<typeof cookies>> | null = null
   try {
@@ -12,12 +14,14 @@ export async function createClient() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-  // Se não houver credenciais, retornar um cliente mock
+  // Se não houver credenciais, retornar um cliente mock (aviso só uma vez por processo)
   if (!supabaseUrl || !supabaseAnonKey) {
-    console.warn('⚠️ Supabase não configurado!')
-    console.warn('📝 Configure NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY no arquivo .env.local')
-    console.warn('📖 Veja CONFIGURAR-SUPABASE.md para instruções completas')
-    console.warn('🔧 Usando mock client (funcionalidade limitada)')
+    if (!_supabaseNotConfiguredWarned) {
+      _supabaseNotConfiguredWarned = true
+      console.warn(
+        '⚠️ Supabase não configurado. Configure NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY (.env.local ou Vercel). Usando mock.'
+      )
+    }
     return createMockClient()
   }
 
