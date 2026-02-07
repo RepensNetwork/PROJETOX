@@ -46,14 +46,14 @@ export async function createClient() {
   )
 }
 
-// Mock client para build/desenvolvimento sem Supabase (evita quebrar prerender quando env não está configurado)
+// Mock client para build sem Supabase (Vercel sem env): auth.getUser + chains .eq/.neq/.order etc. devem existir
 function createMockClient() {
   const empty = { data: [] as any[], error: null }
   const emptySingle = { data: null, error: null }
-  const thenable = (result: { data: any; error: null } = empty) => {
+  const makeChain = (result: { data: any; error: null } = empty) => {
     const chain: any = {
-      then(res: (v: any) => void) {
-        res(result)
+      then(resolve: (v: any) => void) {
+        resolve(result)
         return chain
       },
       catch() {
@@ -66,17 +66,21 @@ function createMockClient() {
       in: () => chain,
       order: () => chain,
       limit: () => chain,
-      ...result,
+      lt: () => chain,
+      gte: () => chain,
+      data: result.data,
+      error: result.error,
     }
     return chain
   }
+  const auth = {
+    getUser: () => Promise.resolve({ data: { user: null }, error: null }),
+    getSession: () => Promise.resolve({ data: { session: null }, error: null }),
+  }
   return {
-    auth: {
-      getUser: () => Promise.resolve({ data: { user: null }, error: null }),
-      getSession: () => Promise.resolve({ data: { session: null }, error: null }),
-    },
+    auth,
     from: (_table: string) => ({
-      select: (_columns?: string) => thenable(),
+      select: (_columns?: string) => makeChain(),
       insert: (_data: any) => ({
         select: () => ({ single: () => emptySingle }),
       }),
