@@ -79,3 +79,13 @@ Se o Vercel nao estiver pegando o ultimo commit:
 - Refaça a integracao (Disconnect/Connect)
 - Garanta que o branch e `main`
 
+### Build falha: "getUser" / "order is not a function" / Supabase não configurado
+O build roda **sem** as variáveis de ambiente (elas só existem em runtime). O código usa um **mock** do Supabase quando `NEXT_PUBLIC_SUPABASE_URL` ou `NEXT_PUBLIC_SUPABASE_ANON_KEY` não estão definidos no build.
+
+**Para o build passar sempre:**
+1. **Recomendado:** Configure no Vercel em **Settings → Environment Variables** (Production e Preview):
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   Assim o build usa o Supabase real e o mock não é usado.
+2. **Se não configurar env:** O mock em `lib/supabase/server.ts` permite que o build conclua; garanta que o **último commit** está no GitHub (`git push origin main`). Se o build ainda falhar, em **Vercel → Settings → General** use **Clear Build Cache** e faça **Redeploy**.
+
