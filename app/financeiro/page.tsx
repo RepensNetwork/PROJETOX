@@ -4,6 +4,8 @@ import { FinanceiroNav } from "@/components/financeiro/financeiro-nav"
 import { syncAllReservasToFinanceiro } from "@/app/actions/financeiro"
 import { FinanceiroContent } from "./financeiro-content"
 
+export const dynamic = "force-dynamic"
+
 export default function FinanceiroPage() {
   syncAllReservasToFinanceiro().catch(() => {})
 

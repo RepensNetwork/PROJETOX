@@ -6,6 +6,8 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Mic, ArrowUpFromLine, ArrowDownToLine } from "lucide-react"
 
+export const dynamic = "force-dynamic"
+
 export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-background">

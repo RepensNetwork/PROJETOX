@@ -11,6 +11,8 @@ import Link from "next/link"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale/pt-BR"
 
+export const dynamic = "force-dynamic"
+
 export default async function AdminUsuariosPage() {
   const [currentUser, membros] = await Promise.all([
     getCurrentUser(),

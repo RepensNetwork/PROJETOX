@@ -9,6 +9,8 @@ import {
 } from "@/app/actions/financeiro"
 import { ContasPagarClient } from "./contas-pagar-client"
 
+export const dynamic = "force-dynamic"
+
 export default async function ContasPagarPage() {
   syncAllReservasToFinanceiro().catch(() => {})
   const [todosDespesa, categorias, contas, escalas] = await Promise.all([

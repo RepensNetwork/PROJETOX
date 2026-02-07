@@ -9,6 +9,8 @@ import {
 } from "@/app/actions/financeiro"
 import { MovimentacoesClient } from "./movimentacoes-client"
 
+export const dynamic = "force-dynamic"
+
 export default async function MovimentacoesPage() {
   syncAllReservasToFinanceiro().catch(() => {})
   const [lancamentos, categorias, contas, escalas] = await Promise.all([

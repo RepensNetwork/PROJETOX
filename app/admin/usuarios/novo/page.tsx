@@ -7,6 +7,8 @@ import { ArrowLeft, UserPlus } from "lucide-react"
 import Link from "next/link"
 import { CriarUsuarioForm } from "@/components/admin/criar-usuario-form"
 
+export const dynamic = "force-dynamic"
+
 export default async function AdminNovoUsuarioPage() {
   const currentUser = await getCurrentUser()
 

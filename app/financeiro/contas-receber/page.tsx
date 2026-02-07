@@ -3,6 +3,8 @@ import { FinanceiroNav } from "@/components/financeiro/financeiro-nav"
 import { ContasReceberClient } from "./contas-receber-client"
 import { getCachedLancamentos, getCachedCategoriasAll, getCachedContasAll, getCachedEscalasParaFinanceiro } from "@/app/actions/financeiro"
 
+export const dynamic = "force-dynamic"
+
 export default async function ContasReceberPage() {
   const [todosReceita, categorias, contas, escalas] = await Promise.all([
     getCachedLancamentos({ tipo: "receita", limit: 500 }),
